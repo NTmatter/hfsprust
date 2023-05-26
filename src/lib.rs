@@ -344,14 +344,13 @@ struct CatalogFolder {
     reserved: u32,
 }
 
-
 /// Defined in documentation for `struct HFSPlusCatalogFile` in
-/// TN1150 > Catalog File Records. 
+/// TN1150 > Catalog File Records.
 #[allow(non_camel_case_types, clippy::enum_variant_names)]
 #[repr(u16)]
 enum CatalogFileBit {
-    kHFSFileLockedBit       = 0x0000,
-    kHFSThreadExistsBit     = 0x0001,
+    kHFSFileLockedBit = 0x0000,
+    kHFSThreadExistsBit = 0x0001,
 }
 
 /// Defined in documentation for `struct HFSPlusCatalogFile` in
@@ -359,15 +358,15 @@ enum CatalogFileBit {
 #[allow(non_camel_case_types, clippy::enum_variant_names)]
 #[repr(u16)]
 enum CatalogFileBitMask {
-    kHFSFileLockedMask       = 0x0001,
-    kHFSThreadExistsMask     = 0x0002,
+    kHFSFileLockedMask = 0x0001,
+    kHFSThreadExistsMask = 0x0002,
 }
 
 /// BTree leaf node for Files. Defined as `struct HFSPlusCatalogFile` in
 /// TN1150 > Catalog File Records
 struct CatalogFile {
     record_type: CatalogFileDataType,
-    /// 
+    ///
     flags: u16,
     reserved_1: u32,
     file_id: CatalogNodeId,
@@ -382,6 +381,15 @@ struct CatalogFile {
 
     data_fork: ForkData,
     resource_fork: ForkData,
+}
+
+/// BTree link to CNID. Defined as `struct HFSPlusCatalogThread` in
+/// TN1150 > Catalog Thread Records.
+struct CatalogThread {
+    record_type: CatalogFolderDataType,
+    reserved: i16,
+    parent_id: CatalogNodeId,
+    node_name: HFSUniStr255,
 }
 
 /// A location on screen, used to store window placement.
@@ -474,6 +482,48 @@ struct ExtendedFolderInfo {
     extened_finder_flags: u16,
     reserved_2: i16,
     put_away_folder_id: i32,
+}
+
+
+/// Defined as `struct HFSPlusExtentKey` in TN1150 > Extents Overflow File
+/// Key.
+struct ExtentKey {
+    key_length: u16,
+    fork_type: ExtentKeyForkType,
+    pad: u8,
+    file_id: CatalogNodeId,
+    start_block: u32,
+}
+
+/// Defined in docs for struct HFSPlusExtentKey` in
+/// TN1150 > Extents Overflow File Key.
+#[repr(u8)]
+enum ExtentKeyForkType {
+    Data = 0x00,
+    Resource = 0xFF,
+}
+
+/// Defined in TN1150 > Attributes File Data
+#[allow(non_camel_case_types, clippy::enum_variant_names)]
+#[repr(u32)]
+enum AttributeForkDataType {
+    kHFSPlusAttrInlineData  = 0x10,
+    kHFSPlusAttrForkData    = 0x20,
+    kHFSPlusAttrExtents     = 0x30,
+}
+
+/// Defined as `struct HFSPlusAttrForkData` in TN1150 > Fork Data Attributes.
+struct AttributeForkData {
+    record_type: AttributeForkDataType,
+    reserved: u32,
+    fork: ForkData,
+}
+
+/// Defined as `struct HFSPlusATtrExtents` in TN1150 > Extension Attributes.
+struct AttributeExtents {
+    record_type: AttributeForkDataType,
+    reserved: u32,
+    extents: ExtentRecord,
 }
 
 pub fn add(left: usize, right: usize) -> usize {
