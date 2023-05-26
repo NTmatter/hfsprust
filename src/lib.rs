@@ -139,8 +139,36 @@ struct ForkData {
 }
 
 
-#[allow(non_upper_case_globals)]
-const kHFSPlusSigWord: [u8; 2] = [b'H', b'+'];
+/// Volume Signature, defined as `kHFSPlusSigWord` in TN1150 > Volume Header.
+const VOLUME_SIGNATURE: [u8; 2] = [b'H', b'+'];
+
+/// Known volume attribute bits. Defined as part of `struct HFSPlusVolumeHeader`
+/// in TN1150 > Volume Header. Unknown bits MUST be zero.
+#[repr(u32)]
+enum VolumeAttributeBit {
+    // Bits 0-6 are reserved
+    // Documentation implies that 7 is reserved as well
+    /// Volume is write-protected due to a hardware setting.
+    /// NOTE: This is an assumption, as TN1150 does not document the bit.
+    HardwareLock = 7,
+    /// Volume successfully flushed during unmount. Set to 1 when unmounted.
+    Unmounted = 8,
+    /// Bad blocks are defined in Extents Overflow File.
+    SparedBlocks = 9,
+    /// Volume should not be cached in memory.
+    NoCacheRequired = 10,
+    /// Volume is currently mounted read-write. Set to zero when mounted RW.
+    BootVolumeInconsistent = 11,
+    /// NextCatalogNodeId has overflowed.
+    CatalogNodeIdsReused = 12,
+    /// Volume has a journal.
+    Journaled = 13,
+    // Bit 14 is reserved
+    /// Volume is write-protected due to a software setting.
+    SoftwareLock = 15,
+    // Bits 16-31 are reserved
+}
+
 
 /// Volume Header, stored at 1024 bytes from start, and secondary header at 512
 /// bytes from the end. Defined as `struct HFSPlusVolumeHeader` in
@@ -167,7 +195,7 @@ struct VolumeHeader {
     next_allocation: u32,
     rsrc_clump_size: u32,
     data_clump_size: u32,
-    next_catalog_id: u32, // HFSCatalogNodeId ?
+    next_catalog_id: CatalogNodeId,
     
     write_count: u32,
     encodings_bitmap: u64,
