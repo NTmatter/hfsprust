@@ -5,8 +5,13 @@ edition = "2021"
 publish = false
 authors = ["Thomas Johnson <NTmatter@gmail.com>"]
 description = "Tools for reading (or attempting to read) damaged HFS+ volumes."
-keywords = ["filesystem"]
+keywords = ["hfs", "hfsplus"]
+categories = ["filesystem"]
+repository = "https://github.com/NTmatter/hfsprust.git"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[badges]
+maintenance = { status = "experimental" }
 
 [dependencies]
