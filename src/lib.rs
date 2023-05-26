@@ -5,14 +5,14 @@
 /// Strings are stored fully-decomposed in canonical order.
 struct HFSUniStr255 {
     length: u16,
-    unicode: [u16; 255]
+    unicode: [u16; 255],
 }
 
 /// Encoding for conversion to MacOS-encoded Pascal String.
 /// Defined in TN1150 > Text Encodings.
-/// Representation is TBD
+#[repr(u32)]
 #[allow(clippy::enum_variant_names)]
-enum TextEncodings {
+enum TextEncoding {
     MacRoman = 0,
     MacJapanese = 1,
     MacChineseTriad = 2,
@@ -76,7 +76,7 @@ struct BsdInfo {
     admin_flags: u8,
     owner_flags: u8,
     file_mode: u16,
-    special: BsdInfoSpecial
+    special: BsdInfoSpecial,
 }
 
 // TODO Populate fileMode enum once it needs to be referenced
@@ -85,17 +85,17 @@ enum FileMode {
     Suid = 0o004000,
     Sgid = 0o002000,
     Sticky = 0o001000,
-    
+
     OwnerRwxMask = 0o000700,
     OwnerR = 0o000400,
     OwnerW = 0o000200,
     OwnerX = 0o000100,
-    
+
     GroupRwxMask = 0o000070,
     GroupR = 0o000040,
     GroupW = 0o000020,
     GroupX = 0o000010,
-    
+
     OtherRwxMask = 0o000007,
     OtherR = 0o000004,
     OtherW = 0o000002,
@@ -112,21 +112,21 @@ enum FileMode {
     Whiteout = 0o160000,
 }
 
-
 /// Extent information. Defined as `struct HfsPlusExtentDescriptor` in
 /// TN1150 > Fork Data Structure.
+#[derive(PartialEq)]
 struct ExtentDescriptor {
     start_block: u32,
     block_count: u32,
 }
 
 /// When an extent descriptor is not used, it is set to zero.
-const UNUSED_EXTENT_DESCRIPTOR: ExtentDescriptor = ExtentDescriptor { 
+const UNUSED_EXTENT_DESCRIPTOR: ExtentDescriptor = ExtentDescriptor {
     start_block: 0,
     block_count: 0,
- };
+};
 
-/// A file's extent record is 8 
+/// A file's extent record is 8
 type ExtentRecord = [ExtentDescriptor; 8];
 
 /// Resource and Data Fork contents. Defined as `struct HFSPlusForkData` in
@@ -137,7 +137,6 @@ struct ForkData {
     total_blocks: u32,
     extents: ExtentRecord,
 }
-
 
 /// Volume Signature, defined as `kHFSPlusSigWord` in TN1150 > Volume Header.
 const VOLUME_SIGNATURE: [u8; 2] = [b'H', b'+'];
@@ -169,7 +168,6 @@ enum VolumeAttributeBit {
     // Bits 16-31 are reserved
 }
 
-
 /// Volume Header, stored at 1024 bytes from start, and secondary header at 512
 /// bytes from the end. Defined as `struct HFSPlusVolumeHeader` in
 /// TN1150 > Volume Header.
@@ -196,7 +194,7 @@ struct VolumeHeader {
     rsrc_clump_size: u32,
     data_clump_size: u32,
     next_catalog_id: CatalogNodeId,
-    
+
     write_count: u32,
     encodings_bitmap: u64,
 
@@ -213,24 +211,269 @@ struct VolumeHeader {
 /// Defined in TN1150 > Catalog File.
 type CatalogNodeId = u32;
 
-#[allow(non_camel_case_types)]
+#[allow(non_camel_case_types, clippy::enum_variant_names)]
 #[repr(u32)]
 enum StandardCnid {
-    kHFSRootParentID            = 1,
-    kHFSRootFolderID            = 2,
-    kHFSExtentsFileID           = 3,
-    kHFSCatalogFileID           = 4,
-    kHFSBadBlockFileID          = 5,
-    kHFSAllocationFileID        = 6,
-    kHFSStartupFileID           = 7,
-    kHFSAttributesFileID        = 8,
-    kHFSRepairCatalogFileID     = 14,
-    kHFSBogusExtentFileID       = 15,
-    kHFSFirstUserCatalogNodeID  = 16,
+    kHFSRootParentID = 1,
+    kHFSRootFolderID = 2,
+    kHFSExtentsFileID = 3,
+    kHFSCatalogFileID = 4,
+    kHFSBadBlockFileID = 5,
+    kHFSAllocationFileID = 6,
+    kHFSStartupFileID = 7,
+    kHFSAttributesFileID = 8,
+    kHFSRepairCatalogFileID = 14,
+    kHFSBogusExtentFileID = 15,
+    kHFSFirstUserCatalogNodeID = 16,
 }
 
-struct CatalogFileKey {
+/// BTree Node Descriptor.
+/// Defined as `struct BTNodeDescriptor` in TN1150 > Node Structure.
+struct BTreeNodeDescriptor {
+    forward_link: u32,
+    backward_link: u32,
+    kind: BTreeNodeKind,
+    height: u8,
+    num_records: u16,
+    reserved: u16,
+}
 
+/// Known values for BTreeNodeDescriptor::kind.
+/// Defined in docs for `struct BTNodeDescriptor` in TN1150 > Catalog File.
+#[allow(non_camel_case_types, clippy::enum_variant_names)]
+#[repr(i8)]
+enum BTreeNodeKind {
+    kBTLeafNode = -1,
+    kBTIndexNode = 0,
+    kBTHeaderNode = 1,
+    kBTMapNode = 2,
+}
+
+struct BTreeHeaderRecord {
+    tree_depth: u16,
+    root_node: u32,
+    leaf_records: u32,
+    first_leaf_node: u32,
+    last_leaf_node: u32,
+    node_size: u16,
+    max_key_length: u16,
+    total_nodes: u32,
+    free_nodes: u32,
+    reserved_1: u16,
+    clump_size: u32,
+    btree_type: BTreeType,
+    key_compare_type: BTreeKeyCompareType,
+    attributes: u32,
+    reserved_3: [u32; 16],
+}
+
+/// Information about a catalog file.
+/// Defined as `struct HFSPlusCatalogKey` in TN1150 > Catalog File.
+struct CatalogFileKey {
+    length: u16,
+    parent: CatalogNodeId,
+    name: HFSUniStr255,
+}
+
+/// Type of data contained in this catalog file.
+/// Defined in documentation for `struct HFSPlusCatalogKey` in
+/// TN1150 > Catalog File Data.
+#[allow(non_camel_case_types, clippy::enum_variant_names)]
+#[repr(u16)]
+enum CatalogFileDataType {
+    kHFSPlusFolderRecord = 0x0001,
+    kHFSPlusFileRecord = 0x0002,
+    kHFSPlusFolderThreadRecord = 0x0003,
+    kHFSPlusFileThreadRecord = 0x0004,
+}
+
+/// Type of data contained in this catalog file.
+/// Defined in documentation for `struct HFSPlusCatalogKey` in
+/// TN1150 > Catalog File Data.
+#[allow(non_camel_case_types, clippy::enum_variant_names)]
+#[repr(u16)]
+enum CatalogFolderDataType {
+    kHFSFolderRecord = 0x0100,
+    kHFSFileRecord = 0x0200,
+    kHFSFolderThreadRecord = 0x0300,
+    kHFSFileThreadRecord = 0x0400,
+}
+
+// Well-known values for BTreeNodeDescriptor.
+/// Defined in documentation for `struct HFSPlusCatalogKey` in
+/// TN1150 > Catalog File Data.
+#[allow(non_camel_case_types, clippy::enum_variant_names)]
+#[repr(u8)]
+enum BTreeType {
+    kHFSBTreeType = 0,    // control file
+    kUserBTreeType = 128, // user btree type starts from 128
+    kReservedBTreeType = 255,
+}
+
+// Comparison mode, depending on HFSX support.
+/// Defined in documentation for `struct HFSPlusCatalogKey` in
+/// TN1150 > Catalog File Data.
+#[allow(non_camel_case_types, clippy::enum_variant_names)]
+#[repr(u8)]
+enum BTreeKeyCompareType {
+    kHFSCaseFolding = 0xCF,
+    kHFSBinaryCompare = 0xBC,
+}
+
+// TODO User Data Record: Second record in header node must be 128 bytes.
+
+// TODO Map Record: Occupies remaining space in header node.
+
+/// BTree leaf node for Folders. Defined as `struct HFSPlusCatalogFolder`
+/// in TN1150 > Catalog Folder Records
+struct CatalogFolder {
+    /// Always CatalogFolderDataType::kHFSPlusFolderRecord
+    record_type: CatalogFolderDataType,
+    flags: u16,
+    valence: u32,
+    folder_id: CatalogNodeId,
+    create_date: Date,
+    content_mod_date: Date,
+    attribute_mod_date: Date,
+    access_date: Date,
+    backup_date: Date,
+    permissions: BsdInfo,
+    user_info: FolderInfo,
+    ifnder_info: ExtendedFolderInfo,
+    text_encoding: TextEncoding,
+    reserved: u32,
+}
+
+
+/// Defined in documentation for `struct HFSPlusCatalogFile` in
+/// TN1150 > Catalog File Records. 
+#[allow(non_camel_case_types, clippy::enum_variant_names)]
+#[repr(u16)]
+enum CatalogFileBit {
+    kHFSFileLockedBit       = 0x0000,
+    kHFSThreadExistsBit     = 0x0001,
+}
+
+/// Defined in documentation for `struct HFSPlusCatalogFile` in
+/// TN1150 > Catalog File Records.
+#[allow(non_camel_case_types, clippy::enum_variant_names)]
+#[repr(u16)]
+enum CatalogFileBitMask {
+    kHFSFileLockedMask       = 0x0001,
+    kHFSThreadExistsMask     = 0x0002,
+}
+
+/// BTree leaf node for Files. Defined as `struct HFSPlusCatalogFile` in
+/// TN1150 > Catalog File Records
+struct CatalogFile {
+    record_type: CatalogFileDataType,
+    /// 
+    flags: u16,
+    reserved_1: u32,
+    file_id: CatalogNodeId,
+    create_date: Date,
+    content_mod_date: Date,
+    attribute_mod_date: Date,
+    backup_date: Date,
+    permissions: BsdInfo,
+    finder_info: ExtendedFileInfo,
+    text_encoding: TextEncoding,
+    reserved_2: u32,
+
+    data_fork: ForkData,
+    resource_fork: ForkData,
+}
+
+/// A location on screen, used to store window placement.
+/// Defined in TN1150 > Finder Info.
+struct Point {
+    v: i16,
+    h: i16,
+}
+
+/// Rectangular region used for Directory windows.
+/// Defined in TN1150 > Finder Info.
+struct Rect {
+    top: i16,
+    left: i16,
+    bottom: i16,
+    right: i16,
+}
+
+/// Four characters representing OS used to write data.
+/// Defined in TN1150 > Finder Info.
+type OSType = u32;
+
+/// Presentation info for Finder.
+/// Defined in TN1150 > Finder Info.
+struct FileInfo {
+    file_type: OSType,
+    file_creator: OSType,
+    finder_flags: u16,
+    location: Point,
+    reserved: u16,
+}
+
+/// Additional file information for display in Finder
+/// Defined in TN1150 > Finder Info.
+struct ExtendedFileInfo {
+    reserved_1: [i16; 4],
+    extended_finder_flags: u16,
+    reserved_2: i16,
+    put_away_folder_id: i32,
+}
+
+/// Known flags for Finder
+/// Defined in TN1150 > Finder Info.
+#[allow(non_camel_case_types, clippy::enum_variant_names)]
+#[repr(u16)]
+enum FileInfoFinderFlags {
+    /// Files and Folders (System 6)
+    kIsOnDesk = 0x0001,
+    /// Files and Folders
+    kColor = 0x000E,
+    /// Files only (Applications only). If clear, the application needs
+    /// to write to its resource fork, and therefore cannot be shared
+    /// on a server.
+    kIsShared = 0x0040,
+    /// Files only (Extensions/Control Panels only). This file contains
+    /// no INIT resource.
+    kHasNoINITs = 0x0080,
+    /// Files only. Clear if the file contains desktop database resources
+    /// ('BNDL', 'FREF', 'open', 'kind' ...) that have not been added yet.
+    /// Set only by he finder. Reserved for folders.
+    kHasBeenInited = 0x0100,
+    /// Files and folders
+    kHasCustomIcon = 0x0400,
+    /// Files only.
+    kIsStationery = 0x0800,
+    /// Files and folders
+    kNameLocked = 0x1000,
+    /// Files only.
+    kHasBundle = 0x2000,
+    /// Files and folders
+    kIsInvisible = 0x4000,
+    /// Files only.
+    kIsAlias = 0x8000,
+}
+
+/// Finder Metadata and display information
+/// Defined in TN1150 > Finder Info.
+struct FolderInfo {
+    window_bounds: Rect,
+    finder_flags: u16,
+    location: Point,
+    reserved: u16,
+}
+
+/// Finder Metadata and display information
+/// Defined in TN1150 > Finder Info.
+struct ExtendedFolderInfo {
+    scroll_position: Point,
+    reserved_1: i32,
+    extened_finder_flags: u16,
+    reserved_2: i16,
+    put_away_folder_id: i32,
 }
 
 pub fn add(left: usize, right: usize) -> usize {
