@@ -1,6 +1,8 @@
 #![forbid(unsafe_code)]
 #![allow(dead_code)]
 
+use deku::prelude::*;
+
 /// Unicode 2.0 String. Defined in TN1150 > HFS Plus Names.
 /// Strings are stored fully-decomposed in canonical order.
 struct HFSUniStr255 {
@@ -114,7 +116,8 @@ enum FileMode {
 
 /// Extent information. Defined as `struct HfsPlusExtentDescriptor` in
 /// TN1150 > Fork Data Structure.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, DekuRead)]
+#[deku(endian = "big")]
 struct ExtentDescriptor {
     start_block: u32,
     block_count: u32,
@@ -126,16 +129,20 @@ const UNUSED_EXTENT_DESCRIPTOR: ExtentDescriptor = ExtentDescriptor {
     block_count: 0,
 };
 
-/// A file's extent record is 8
+/// A file's extent record is 8 Extent Descriptors
 type ExtentRecord = [ExtentDescriptor; 8];
 
 /// Resource and Data Fork contents. Defined as `struct HFSPlusForkData` in
 /// TN1150 > Fork Data Structure.
-#[derive(Debug)]
+#[derive(Debug, DekuRead)]
 struct ForkData {
+    #[deku(endian = "big")]
     logical_size: u64,
+    #[deku(endian = "big")]
     clump_size: u32,
+    #[deku(endian = "big")]
     total_blocks: u32,
+
     extents: ExtentRecord,
 }
 
@@ -172,34 +179,55 @@ enum VolumeAttributeBit {
 /// Volume Header, stored at 1024 bytes from start, and secondary header at 512
 /// bytes from the end. Defined as `struct HFSPlusVolumeHeader` in
 /// TN1150 > Volume Header.
-#[derive(Debug)]
+#[derive(Debug, DekuRead)]
 struct VolumeHeader {
+    #[deku(endian = "big")]
     signature: u16,
+    #[deku(endian = "big")]
     version: u16,
+    #[deku(endian = "big")]
     attributes: u32,
+    #[deku(endian = "big")]
     last_mounted_version: u32,
+    #[deku(endian = "big")]
     journal_info_block: u32,
 
+    #[deku(endian = "big")]
     create_date: Date,
+    #[deku(endian = "big")]
     modify_date: Date,
+    #[deku(endian = "big")]
     backup_date: Date,
+    #[deku(endian = "big")]
     checked_date: Date,
 
+    #[deku(endian = "big")]
     file_count: u32,
+    #[deku(endian = "big")]
     folder_count: u32,
 
+    #[deku(endian = "big")]
     block_size: u32,
+    #[deku(endian = "big")]
     total_blocks: u32,
+    #[deku(endian = "big")]
     free_blocks: u32,
 
+    #[deku(endian = "big")]
     next_allocation: u32,
+    #[deku(endian = "big")]
     rsrc_clump_size: u32,
+    #[deku(endian = "big")]
     data_clump_size: u32,
+    #[deku(endian = "big")]
     next_catalog_id: CatalogNodeId,
 
+    #[deku(endian = "big")]
     write_count: u32,
+    #[deku(endian = "big")]
     encodings_bitmap: u64,
 
+    #[deku(endian = "big")]
     finder_info: [u32; 8],
 
     allocation_file: ForkData,
@@ -486,7 +514,6 @@ struct ExtendedFolderInfo {
     put_away_folder_id: i32,
 }
 
-
 /// Defined as `struct HFSPlusExtentKey` in TN1150 > Extents Overflow File
 /// Key.
 struct ExtentKey {
@@ -509,9 +536,9 @@ enum ExtentKeyForkType {
 #[allow(non_camel_case_types, clippy::enum_variant_names)]
 #[repr(u32)]
 enum AttributeForkDataType {
-    kHFSPlusAttrInlineData  = 0x10,
-    kHFSPlusAttrForkData    = 0x20,
-    kHFSPlusAttrExtents     = 0x30,
+    kHFSPlusAttrInlineData = 0x10,
+    kHFSPlusAttrForkData = 0x20,
+    kHFSPlusAttrExtents = 0x30,
 }
 
 /// Defined as `struct HFSPlusAttrForkData` in TN1150 > Fork Data Attributes.
