@@ -114,7 +114,7 @@ enum FileMode {
 
 /// Extent information. Defined as `struct HfsPlusExtentDescriptor` in
 /// TN1150 > Fork Data Structure.
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 struct ExtentDescriptor {
     start_block: u32,
     block_count: u32,
@@ -131,6 +131,7 @@ type ExtentRecord = [ExtentDescriptor; 8];
 
 /// Resource and Data Fork contents. Defined as `struct HFSPlusForkData` in
 /// TN1150 > Fork Data Structure.
+#[derive(Debug)]
 struct ForkData {
     logical_size: u64,
     clump_size: u32,
@@ -171,6 +172,7 @@ enum VolumeAttributeBit {
 /// Volume Header, stored at 1024 bytes from start, and secondary header at 512
 /// bytes from the end. Defined as `struct HFSPlusVolumeHeader` in
 /// TN1150 > Volume Header.
+#[derive(Debug)]
 struct VolumeHeader {
     signature: u16,
     version: u16,
