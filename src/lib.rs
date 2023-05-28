@@ -118,7 +118,7 @@ enum FileMode {
 /// TN1150 > Fork Data Structure.
 #[derive(Debug, PartialEq, DekuRead)]
 #[deku(endian = "big")]
-struct ExtentDescriptor {
+pub struct ExtentDescriptor {
     start_block: u32,
     block_count: u32,
 }
@@ -130,12 +130,13 @@ const UNUSED_EXTENT_DESCRIPTOR: ExtentDescriptor = ExtentDescriptor {
 };
 
 /// A file's extent record is 8 Extent Descriptors
+// TODO Convert to Option<ExtentDescriptor>
 type ExtentRecord = [ExtentDescriptor; 8];
 
 /// Resource and Data Fork contents. Defined as `struct HFSPlusForkData` in
 /// TN1150 > Fork Data Structure.
 #[derive(Debug, DekuRead)]
-struct ForkData {
+pub struct ForkData {
     #[deku(endian = "big")]
     logical_size: u64,
     #[deku(endian = "big")]
@@ -180,61 +181,61 @@ enum VolumeAttributeBit {
 /// bytes from the end. Defined as `struct HFSPlusVolumeHeader` in
 /// TN1150 > Volume Header.
 #[derive(Debug, DekuRead)]
-struct VolumeHeader {
+pub struct VolumeHeader {
     #[deku(endian = "big")]
-    signature: u16,
+    pub signature: u16,
     #[deku(endian = "big")]
-    version: u16,
+    pub version: u16,
     #[deku(endian = "big")]
-    attributes: u32,
+    pub attributes: u32,
     #[deku(endian = "big")]
-    last_mounted_version: u32,
+    pub last_mounted_version: u32,
     #[deku(endian = "big")]
-    journal_info_block: u32,
+    pub journal_info_block: u32,
 
     #[deku(endian = "big")]
-    create_date: Date,
+    pub create_date: Date,
     #[deku(endian = "big")]
-    modify_date: Date,
+    pub modify_date: Date,
     #[deku(endian = "big")]
-    backup_date: Date,
+    pub backup_date: Date,
     #[deku(endian = "big")]
-    checked_date: Date,
+    pub checked_date: Date,
 
     #[deku(endian = "big")]
-    file_count: u32,
+    pub file_count: u32,
     #[deku(endian = "big")]
-    folder_count: u32,
+    pub folder_count: u32,
 
     #[deku(endian = "big")]
-    block_size: u32,
+    pub block_size: u32,
     #[deku(endian = "big")]
-    total_blocks: u32,
+    pub total_blocks: u32,
     #[deku(endian = "big")]
-    free_blocks: u32,
+    pub free_blocks: u32,
 
     #[deku(endian = "big")]
-    next_allocation: u32,
+    pub next_allocation: u32,
     #[deku(endian = "big")]
-    rsrc_clump_size: u32,
+    pub rsrc_clump_size: u32,
     #[deku(endian = "big")]
-    data_clump_size: u32,
+    pub data_clump_size: u32,
     #[deku(endian = "big")]
-    next_catalog_id: CatalogNodeId,
+    pub next_catalog_id: CatalogNodeId,
 
     #[deku(endian = "big")]
-    write_count: u32,
+    pub write_count: u32,
     #[deku(endian = "big")]
-    encodings_bitmap: u64,
+    pub encodings_bitmap: u64,
 
     #[deku(endian = "big")]
-    finder_info: [u32; 8],
+    pub finder_info: [u32; 8],
 
-    allocation_file: ForkData,
-    extents_file: ForkData,
-    catalog_file: ForkData,
-    attributes_file: ForkData,
-    startup_file: ForkData,
+    pub allocation_file: ForkData,
+    pub extents_file: ForkData,
+    pub catalog_file: ForkData,
+    pub attributes_file: ForkData,
+    pub startup_file: ForkData,
 }
 
 /// Catalog Node ID or CNID identifies a B-tree file.
