@@ -263,15 +263,19 @@ enum StandardCnid {
 #[derive(Debug, DekuRead)]
 pub struct BTreeNodeDescriptor {
     #[deku(endian = "big")]
-    forward_link: u32,
+    pub forward_link: u32,
     #[deku(endian = "big")]
-    backward_link: u32,
-    kind: BTreeNodeKind,
-    height: u8,
+    pub backward_link: u32,
+    pub kind: BTreeNodeKind,
+    pub height: u8,
     #[deku(endian = "big")]
-    num_records: u16,
+    pub num_records: u16,
     #[deku(endian = "big")]
-    reserved: u16,
+    pub reserved: u16,
+}
+
+impl BTreeNodeDescriptor {
+    pub const SIZE: usize = 14;
 }
 
 /// Known values for BTreeNodeDescriptor::kind.
@@ -280,7 +284,7 @@ pub struct BTreeNodeDescriptor {
 #[derive(Debug, DekuRead)]
 #[deku(type = "i8")]
 #[repr(i8)]
-enum BTreeNodeKind {
+pub enum BTreeNodeKind {
     kBTLeafNode = -1,
     kBTIndexNode = 0,
     kBTHeaderNode = 1,
@@ -291,32 +295,45 @@ enum BTreeNodeKind {
 #[derive(Debug, DekuRead)]
 pub struct BTreeHeaderRecord {
     #[deku(endian = "big")]
-    tree_depth: u16,
+    pub tree_depth: u16,
     #[deku(endian = "big")]
-    root_node: u32,
+    pub root_node: u32,
     #[deku(endian = "big")]
-    leaf_records: u32,
+    pub leaf_records: u32,
     #[deku(endian = "big")]
-    first_leaf_node: u32,
+    pub first_leaf_node: u32,
     #[deku(endian = "big")]
-    last_leaf_node: u32,
+    pub last_leaf_node: u32,
     #[deku(endian = "big")]
-    node_size: u16,
+    pub node_size: u16,
     #[deku(endian = "big")]
-    max_key_length: u16,
+    pub max_key_length: u16,
     #[deku(endian = "big")]
-    total_nodes: u32,
+    pub total_nodes: u32,
     #[deku(endian = "big")]
-    free_nodes: u32,
+    pub free_nodes: u32,
     #[deku(endian = "big")]
-    reserved_1: u16,
+    pub reserved_1: u16,
     #[deku(endian = "big")]
-    clump_size: u32,
-    btree_type: BTreeType,
-    key_compare_type: u8, //BTreeKeyCompareType,
+    pub clump_size: u32,
+    pub btree_type: BTreeType,
+    pub key_compare_type: u8, //BTreeKeyCompareType,
     #[deku(endian = "big")]
-    attributes: u32,
-    reserved_3: [u32; 16],
+    pub attributes: u32,
+    pub reserved_3: [u32; 16],
+}
+
+impl BTreeHeaderRecord {
+    pub const SIZE: usize = 106;
+}
+
+#[derive(Debug, DekuRead)]
+pub struct BTreeUserDataRecord {
+    reserved: [u8; 128],
+}
+
+impl BTreeUserDataRecord {
+    pub const SIZE: usize = 128;
 }
 
 /// Information about a catalog file.
@@ -358,7 +375,7 @@ enum CatalogFolderDataType {
 #[derive(Debug, DekuRead)]
 #[deku(type = "u8")]
 #[repr(u8)]
-enum BTreeType {
+pub enum BTreeType {
     kHFSBTreeType = 0,    // control file
     kUserBTreeType = 128, // user btree type starts from 128
     kReservedBTreeType = 255,
