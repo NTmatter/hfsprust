@@ -5,28 +5,27 @@ use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom};
 use std::os::unix::prelude::FileExt;
 
-fn main() {
+fn main() -> Result<(), io::Error> {
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
         eprintln!("usage: read /path/to/file.img");
-        return;
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Missing file argument",
+        ));
     }
 
     let test_path = args.get(1).unwrap();
     println!("Operating on {test_path}");
 
-    let Ok(mut test_file) = File::options().read(true).open(test_path) else {
-        eprintln!("Failed to open file. Exiting.");
-        return;
-    };
+    let mut test_file = File::options().read(true).open(test_path)?;
 
     // Leading zeroes at start of file
     const PREAMBLE_LENGTH: usize = 1024;
     let mut buf = [0u8; PREAMBLE_LENGTH];
-    let Ok(()) = test_file.read_exact_at(&mut buf, 0) else {
-        eprintln!("Failed to read leading zeroes before volume header");
-        return;
-    };
+    test_file
+        .read_exact_at(&mut buf, 0)
+        .expect("1kB of zeroes present at start of volume");
 
     if buf.into_iter().any(|x| x != 0) {
         eprintln!("Some bytes in pre-header were non-zero. Ignoring.");
@@ -35,17 +34,11 @@ fn main() {
     // Read volume header structure.
     const VOLUME_HEADER_LENGTH: usize = 512;
     let mut buf = [0u8; VOLUME_HEADER_LENGTH];
-    let Ok(()) = test_file.read_exact_at(&mut buf, 1024) else {
-        eprintln!("Failed to read volume header. Exiting.");
-        return;
-    };
+    test_file
+        .read_exact_at(&mut buf, 1024)
+        .expect("Read volume header");
 
-    let parsed = VolumeHeader::from_bytes((&buf, 0));
-    if parsed.is_err() {
-        eprintln!("Failed to parse volume header: {}", parsed.unwrap_err());
-        return;
-    }
-    let (_rest, volume_header) = parsed.unwrap();
+    let (_rest, volume_header) = VolumeHeader::from_bytes((&buf, 0)).expect("Parse volume header");
 
     dbg!(&volume_header);
 
@@ -73,7 +66,10 @@ fn main() {
     let btree_node_descriptor = read_node_descriptor(&test_file, catalog_data_start as u64);
 
     if btree_node_descriptor.is_err() {
-        eprintln!("Failed to read first btree node descriptor: {}", btree_node_descriptor.unwrap_err());
+        eprintln!(
+            "Failed to read first btree node descriptor: {}",
+            btree_node_descriptor.unwrap_err()
+        );
     } else {
         dbg!(btree_node_descriptor.unwrap());
     }
@@ -88,7 +84,18 @@ fn main() {
         dbg!(btree_header.unwrap());
     };
 
-    let _ = assemble_extents(&volume_header.catalog_file, volume_header.block_size as usize, &mut test_file);
+    let catalog_extents = assemble_extents(
+        &volume_header.catalog_file,
+        volume_header.block_size as usize,
+        &mut test_file,
+    )?;
+
+    println!(
+        "Read {} bytes for catalog file extents",
+        catalog_extents.len()
+    );
+
+    Ok(())
 }
 
 fn read_node_descriptor(file: &File, offset: u64) -> Result<BTreeNodeDescriptor, io::Error> {
@@ -113,14 +120,20 @@ fn read_btree_header(file: &File, offset: u64) -> Result<BTreeHeaderRecord, io::
     Ok(btree_header)
 }
 
-
-fn assemble_extents(fork_data: &ForkData, block_size: usize, stream: &mut (impl Read + Seek)) -> Result<Vec<u8>, io::Error> {
+fn assemble_extents(
+    fork_data: &ForkData,
+    block_size: usize,
+    stream: &mut (impl Read + Seek),
+) -> Result<Vec<u8>, io::Error> {
     let capacity = fork_data.logical_size as usize;
-    let mut data = Vec::<u8>::with_capacity(capacity);
+    let mut data = Vec::<u8>::new(); // with_capacity(capacity);
     data.resize(capacity, 0);
-    
+
     let mut bytes_read = 0;
     for extent in &fork_data.extents {
+        if extent.block_count == 0 {
+            continue;
+        }
         // Take fixed slice from data
         let slice_start = bytes_read;
         let slice_length = extent.block_count as usize * block_size;
@@ -131,11 +144,14 @@ fn assemble_extents(fork_data: &ForkData, block_size: usize, stream: &mut (impl 
         let offset = extent.start_block as u64 * block_size as u64;
         stream.seek(SeekFrom::Start(offset))?;
         stream.read_exact(buf)?;
+
+        // Track bytes read.
         bytes_read += slice_length;
     }
 
-    println!("Bytes read: {bytes_read}");
-    println!("Buffer fill: {}", data.len());
-
     Ok(data)
+}
+
+fn read_btree(stream: &(impl Read + Seek)) {
+    // Header node has a slightly special layout
 }
