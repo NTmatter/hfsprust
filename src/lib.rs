@@ -260,18 +260,25 @@ enum StandardCnid {
 
 /// BTree Node Descriptor.
 /// Defined as `struct BTNodeDescriptor` in TN1150 > Node Structure.
-struct BTreeNodeDescriptor {
+#[derive(Debug, DekuRead)]
+pub struct BTreeNodeDescriptor {
+    #[deku(endian = "big")]
     forward_link: u32,
+    #[deku(endian = "big")]
     backward_link: u32,
     kind: BTreeNodeKind,
     height: u8,
+    #[deku(endian = "big")]
     num_records: u16,
+    #[deku(endian = "big")]
     reserved: u16,
 }
 
 /// Known values for BTreeNodeDescriptor::kind.
 /// Defined in docs for `struct BTNodeDescriptor` in TN1150 > Catalog File.
 #[allow(non_camel_case_types, clippy::enum_variant_names)]
+#[derive(Debug, DekuRead)]
+#[deku(type = "i8")]
 #[repr(i8)]
 enum BTreeNodeKind {
     kBTLeafNode = -1,
@@ -283,19 +290,31 @@ enum BTreeNodeKind {
 /// BTree Header describing upcoming BTree Structure.
 #[derive(Debug, DekuRead)]
 pub struct BTreeHeaderRecord {
+    #[deku(endian = "big")]
     tree_depth: u16,
+    #[deku(endian = "big")]
     root_node: u32,
+    #[deku(endian = "big")]
     leaf_records: u32,
+    #[deku(endian = "big")]
     first_leaf_node: u32,
+    #[deku(endian = "big")]
     last_leaf_node: u32,
+    #[deku(endian = "big")]
     node_size: u16,
+    #[deku(endian = "big")]
     max_key_length: u16,
+    #[deku(endian = "big")]
     total_nodes: u32,
+    #[deku(endian = "big")]
     free_nodes: u32,
+    #[deku(endian = "big")]
     reserved_1: u16,
+    #[deku(endian = "big")]
     clump_size: u32,
     btree_type: BTreeType,
-    key_compare_type: BTreeKeyCompareType,
+    key_compare_type: u8, //BTreeKeyCompareType,
+    #[deku(endian = "big")]
     attributes: u32,
     reserved_3: [u32; 16],
 }
