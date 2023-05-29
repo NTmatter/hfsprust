@@ -2,7 +2,7 @@ use deku::DekuContainerRead;
 use hfsprust::*;
 use std::env;
 use std::fs::File;
-use std::io;
+use std::io::{self, Read, Seek, SeekFrom};
 use std::os::unix::prelude::FileExt;
 
 fn main() {
@@ -15,7 +15,7 @@ fn main() {
     let test_path = args.get(1).unwrap();
     println!("Operating on {test_path}");
 
-    let Ok(test_file) = File::options().read(true).open(test_path) else {
+    let Ok(mut test_file) = File::options().read(true).open(test_path) else {
         eprintln!("Failed to open file. Exiting.");
         return;
     };
@@ -87,6 +87,8 @@ fn main() {
     } else {
         dbg!(btree_header.unwrap());
     };
+
+    let _ = assemble_extents(&volume_header.catalog_file, volume_header.block_size as usize, &mut test_file);
 }
 
 fn read_node_descriptor(file: &File, offset: u64) -> Result<BTreeNodeDescriptor, io::Error> {
@@ -109,4 +111,31 @@ fn read_btree_header(file: &File, offset: u64) -> Result<BTreeHeaderRecord, io::
     let (_rest, btree_header) = BTreeHeaderRecord::from_bytes((&mut buf, 0))?;
 
     Ok(btree_header)
+}
+
+
+fn assemble_extents(fork_data: &ForkData, block_size: usize, stream: &mut (impl Read + Seek)) -> Result<Vec<u8>, io::Error> {
+    let capacity = fork_data.logical_size as usize;
+    let mut data = Vec::<u8>::with_capacity(capacity);
+    data.resize(capacity, 0);
+    
+    let mut bytes_read = 0;
+    for extent in &fork_data.extents {
+        // Take fixed slice from data
+        let slice_start = bytes_read;
+        let slice_length = extent.block_count as usize * block_size;
+        let slice_end = slice_start + slice_length;
+
+        let buf = &mut data[slice_start..slice_end];
+
+        let offset = extent.start_block as u64 * block_size as u64;
+        stream.seek(SeekFrom::Start(offset))?;
+        stream.read_exact(buf)?;
+        bytes_read += slice_length;
+    }
+
+    println!("Bytes read: {bytes_read}");
+    println!("Buffer fill: {}", data.len());
+
+    Ok(data)
 }
