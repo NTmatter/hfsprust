@@ -119,8 +119,8 @@ enum FileMode {
 #[derive(Debug, PartialEq, DekuRead)]
 #[deku(endian = "big")]
 pub struct ExtentDescriptor {
-    start_block: u32,
-    block_count: u32,
+    pub start_block: u32,
+    pub block_count: u32,
 }
 
 /// When an extent descriptor is not used, it is set to zero.
@@ -131,20 +131,20 @@ const UNUSED_EXTENT_DESCRIPTOR: ExtentDescriptor = ExtentDescriptor {
 
 /// A file's extent record is 8 Extent Descriptors
 // TODO Convert to Option<ExtentDescriptor>
-type ExtentRecord = [ExtentDescriptor; 8];
+pub type ExtentRecord = [ExtentDescriptor; 8];
 
 /// Resource and Data Fork contents. Defined as `struct HFSPlusForkData` in
 /// TN1150 > Fork Data Structure.
 #[derive(Debug, DekuRead)]
 pub struct ForkData {
     #[deku(endian = "big")]
-    logical_size: u64,
+    pub logical_size: u64,
     #[deku(endian = "big")]
-    clump_size: u32,
+    pub clump_size: u32,
     #[deku(endian = "big")]
-    total_blocks: u32,
+    pub total_blocks: u32,
 
-    extents: ExtentRecord,
+    pub extents: ExtentRecord,
 }
 
 /// Volume Signature, defined as `kHFSPlusSigWord` in TN1150 > Volume Header.
@@ -280,7 +280,9 @@ enum BTreeNodeKind {
     kBTMapNode = 2,
 }
 
-struct BTreeHeaderRecord {
+/// BTree Header describing upcoming BTree Structure.
+#[derive(Debug, DekuRead)]
+pub struct BTreeHeaderRecord {
     tree_depth: u16,
     root_node: u32,
     leaf_records: u32,
@@ -334,6 +336,8 @@ enum CatalogFolderDataType {
 /// Defined in documentation for `struct HFSPlusCatalogKey` in
 /// TN1150 > Catalog File Data.
 #[allow(non_camel_case_types, clippy::enum_variant_names)]
+#[derive(Debug, DekuRead)]
+#[deku(type = "u8")]
 #[repr(u8)]
 enum BTreeType {
     kHFSBTreeType = 0,    // control file
@@ -345,8 +349,11 @@ enum BTreeType {
 /// Defined in documentation for `struct HFSPlusCatalogKey` in
 /// TN1150 > Catalog File Data.
 #[allow(non_camel_case_types, clippy::enum_variant_names)]
+#[derive(Debug, DekuRead)]
+#[deku(type = "u8")]
 #[repr(u8)]
 enum BTreeKeyCompareType {
+    reserved_hfsx_only = 0x00,
     kHFSCaseFolding = 0xCF,
     kHFSBinaryCompare = 0xBC,
 }
