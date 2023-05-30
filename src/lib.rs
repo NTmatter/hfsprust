@@ -389,15 +389,12 @@ pub struct CatalogFileKey {
 impl TryFrom<Vec<u8>> for CatalogFileKey {
     type Error = io::Error;
 
+    /// Read Key from a series of bytes. Key Length is implicit.
     fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
-        let mut cur = Cursor::new(value);
+        let mut cur = Cursor::new(&value);
 
-        // Are we actually trying to read a Catalog File Key here?
-
-        // Key Length: u16, as per TN1150 > Keyed Records. Might vary for non-leaves.
-        let mut buf = [0u8; 2];
-        cur.read_exact(&mut buf)?;
-        let length = u16::from_be_bytes(buf);
+        // Length is derived from input slice
+        let length = value.len() as u16;
 
         // Key Data
         let mut key: BTreeKey = vec![0u8; length as usize];
@@ -439,14 +436,12 @@ impl TryFrom<Vec<u8>> for CatalogFileKey {
 
 impl Into<Vec<u8>> for CatalogFileKey {
     fn into(self) -> Vec<u8> {
-        let len = 2 // Key Length (u16) 
-            + 4 // Parent CNID (u32) 
+        let len =  4 // Parent CNID (u32) 
             + 2 // Name Length (u16) 
             + 2 * self.name.length // Bytes
             ;
 
         let mut out = Vec::<u8>::with_capacity(len as usize);
-        out.extend_from_slice(len.to_be_bytes().as_slice());
         out.extend_from_slice(self.parent.to_be_bytes().as_slice());
         out.extend_from_slice(self.name.length.to_be_bytes().as_slice());
         self.name
