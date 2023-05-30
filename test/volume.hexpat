@@ -1,3 +1,4 @@
+
 using HFSCatalogNodeID = be u32;
 
 struct HFSPlusExtentDescriptor {
@@ -19,35 +20,35 @@ struct HFSPlusVolumeHeader {
   be u32 attributes;
   be u32 lastMountedVersion;
   be u32 journalInfoBlock;
-  
+
   be u32 createDate;
   be u32 modifyDate;
   be u32 backupDate;
   be u32 checkedDate;
-  
+
   be u32 fileCount;
   be u32 folderCount;
-  
+
   be u32 blockSize;
   be u32 totalBlocks;
   be u32 freeBlocks;
-  
+
   be u32 nextAllocation;
   be u32 rsrcClumpSize;
   be u32 dataClumpSize;
   HFSCatalogNodeID nextCatalogID;
-  
+
   be u32 writeCount;
   be u64 encodingsBitmap;
-  
+
   be u32 finderInfo[8];
-  
+
   HFSPlusForkData allocationFile;
   HFSPlusForkData extentsFile;
   HFSPlusForkData catalogFile;
   HFSPlusForkData attributesFile;
   HFSPlusForkData startupFile;
-  
+
 };
 
 struct BTNodeDescriptor {
@@ -82,8 +83,8 @@ struct BTHeaderRec {
 struct BTreeNode8k {
   BTNodeDescriptor descriptor;
 
-  u8 payload[8192 - 14 - 2 * descriptor.numRecords];
-
+  u8 payload[8192 - 14 - 2 * descriptor.numRecords - 2];
+  be u16 freeSpaceOffset;
   be u16 recordOffsets[descriptor.numRecords];
 };
 
@@ -93,9 +94,10 @@ struct BTree {
   BTHeaderRec headerNodeRecord;
   u8 headerNodeUserData[128]; // Opaque, reserved
   u8 allocationMap[headerNodeRecord.nodeSize - 256];
-  be u16 recordOffsets[headerNodeDescriptor.numRecords + 1];
+  be u16 freeSpaceOffset;
+  be u16 recordOffsets[headerNodeDescriptor.numRecords];
 
-  BTreeNode8k node[10];
+  BTreeNode8k nodes[headerNodeRecord.totalNodes / 100];
 };
 
 struct HFSVolume {

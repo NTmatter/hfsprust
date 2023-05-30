@@ -97,6 +97,7 @@ fn read_btree_node(
     let mut offsets = Vec::<u16>::with_capacity(offset_count);
     let seek_offset = record_size - BTreeNodeDescriptor::SIZE - 2 * offset_count;
     cursor.seek(SeekFrom::Current(seek_offset as i64))?;
+
     for _ in 0..=(node_descriptor.num_records) {
         let mut buf = [0u8; 2];
         cursor.read_exact(&mut buf)?;
@@ -136,13 +137,9 @@ fn read_btree_header(
     let mut buf = vec![0u8; map_record_size as usize];
     stream.read_exact(&mut buf)?;
 
-    let mut buf = [0u8; 2];
-    stream.read_exact(&mut buf)?;
-    let _free_space_offset = u16::from_be_bytes(buf);
-
     // Parse offsets at end of header node
     let mut offsets = Vec::<u16>::with_capacity((node_descriptor.num_records) as usize);
-    for _ in 0..(node_descriptor.num_records) {
+    for _ in 0..=node_descriptor.num_records {
         let mut buf = [0u8; 2];
         stream.read_exact(&mut buf)?;
         let offset = u16::from_be_bytes(buf);
@@ -176,7 +173,6 @@ fn read_btree(mut stream: &mut (impl Read + Seek), block_size: usize) -> Result<
             );
         }
     }
-
     todo!("Parse all BTree nodes")
 }
 

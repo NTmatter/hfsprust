@@ -336,6 +336,25 @@ impl BTreeUserDataRecord {
     pub const SIZE: usize = 128;
 }
 
+// Can we specify size for Deku parse?
+pub struct BTreeAllocationMapRecord {
+    bitmap: Vec<u8>,
+}
+
+impl BTreeAllocationMapRecord {
+    // Algorithm taken from IsAllocationBlockUsed in  TN1150 > Allocation File
+    fn isBlockUsed(&self, allocation_block: u32) -> bool {
+        // TODO handle overflow?
+        let offset = allocation_block / 8;
+        let this_byte = self.bitmap[offset];
+        let bit_mask = 1 << (7 - (allocation_block & 8));
+
+        let is_set = this_byte & bit_mask != 0;
+
+        is_set
+    }
+}
+
 /// Information about a catalog file.
 /// Defined as `struct HFSPlusCatalogKey` in TN1150 > Catalog File.
 struct CatalogFileKey {
