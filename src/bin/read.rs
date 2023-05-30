@@ -170,7 +170,7 @@ fn read_btree(mut stream: &mut (impl Read + Seek), block_size: usize) -> Result<
     // TODO Consider restarting parse from header node
 
     // Read all nodes, skipping empties.
-    for n in 1..10 {
+    for n in 1..total_nodes {
         let res = read_btree_node(&mut stream, block_size, node_size);
         if res.is_err() {
             eprintln!("Node {n} failed: {}", res.unwrap_err());
@@ -216,9 +216,31 @@ fn parse_catalog_leaf(record: &Vec<u8>) -> Result<(), io::Error> {
     let mut key = vec![0u8; key_length as usize];
     cur.read_exact(&mut key)?;
 
+    let mut key_cur = Cursor::new(&key);
+
+    // Key: Parent CNID
+    let mut buf = [0u8; 4];
+    key_cur.read_exact(&mut buf)?;
+    let parent_cnid = u32::from_be_bytes(buf);
+
+    // Key: String Length
+    let mut buf = [0u8; 2];
+    key_cur.read_exact(&mut buf)?;
+    let char_count = u16::from_be_bytes(buf) as usize;
+
+    // Key: File Name
+    let mut name = Vec::<u16>::new();
+    for _ in 0..char_count {
+        let mut buf = [0u8; 2];
+        key_cur.read_exact(&mut buf)?;
+        let char = u16::from_be_bytes(buf);
+        name.push(char);
+    }
+    let name = String::from_utf16_lossy(&name);
+
     // Alignment
     if key_length % 2 == 1 {
-        eprintln!("Found odd key length! Consuming padding.");
+        eprintln!("Found odd key length! Consume padding.");
         // Consider: cur.consume(1);
         cur.read_exact(&mut [0u8; 1])?;
     }
@@ -232,7 +254,7 @@ fn parse_catalog_leaf(record: &Vec<u8>) -> Result<(), io::Error> {
     cur.read_to_end(&mut rest)?;
 
     println!(
-        "\t{kind:?} key[{key_length}]: {key:x?} payload[{}]",
+        "\t{kind:?} key[{key_length}]: {parent_cnid:x?}:'{name}' payload[{}]",
         rest.len()
     );
     Ok(())
