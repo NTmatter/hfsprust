@@ -1,6 +1,7 @@
 use deku::DekuContainerRead;
 use hfsprust::*;
 use itertools::{rciter, Itertools};
+use std::collections::BTreeMap;
 use std::env;
 use std::fs::File;
 use std::io::{self, BufRead, Cursor, Read, Seek, SeekFrom};
@@ -62,9 +63,15 @@ fn main() -> Result<(), io::Error> {
     println!("\tTotal Size: {}", &catalog_extents.len());
 
     let mut cursor = Cursor::new(catalog_extents);
-    read_btree_leaves(&mut cursor, volume_header.block_size as usize)?;
+
+    let map = read_btree_leaves(&mut cursor, volume_header.block_size as usize)?;
 
     Ok(())
+}
+
+/// Construct a derectory path for a given key
+fn path_for_key(map: &BTreeMap<Vec<u8>, CatalogLeafRecord>, key: &Vec<u8>) {
+    let path = Vec::<Vec<u8>>::new();
 }
 
 fn read_btree_node(
@@ -156,14 +163,15 @@ fn read_btree_header(
 fn read_btree_leaves(
     mut stream: &mut (impl Read + Seek),
     block_size: usize,
-) -> Result<(), io::Error> {
+) -> Result<BTreeMap<Vec<u8>, CatalogLeafRecord>, io::Error> {
     let (_node_descriptor, btree_header_record) = read_btree_header(&mut stream, block_size)?;
     let node_size = btree_header_record.node_size as usize;
     let total_nodes = btree_header_record.total_nodes as usize;
 
     // TODO Consider restarting parse from header node
 
-    // Read all nodes, skipping empties.
+    // Read all nodes and extract leaves.
+    let mut btree = BTreeMap::new();
     for n in 1..total_nodes {
         let res = read_btree_node(&mut stream, block_size, node_size);
         if res.is_err() {
@@ -190,12 +198,26 @@ fn read_btree_leaves(
             continue;
         }
 
-        records.iter().for_each(|record| {
-            let _ = parse_catalog_leaf(&record);
-        });
+        for record in records {
+            let (key, leaf_record) = parse_catalog_leaf(&record)?;
+            if let CatalogLeafRecord::File(file) = &leaf_record {
+                let active_extents = file
+                    .data_fork
+                    .extents
+                    .iter()
+                    .filter(|extent| extent.block_count > 0)
+                    .count();
+                println!(
+                    "\t\t{} bytes in {} blocks across {} extents",
+                    file.data_fork.logical_size, file.data_fork.total_blocks, active_extents
+                );
+            };
+
+            btree.insert(key, leaf_record);
+        }
     }
 
-    todo!("Assemble BTree from constituent records")
+    Ok(btree)
 }
 
 fn parse_catalog_leaf(record: &Vec<u8>) -> Result<(Vec<u8>, CatalogLeafRecord), io::Error> {
