@@ -66,6 +66,26 @@ fn main() -> Result<(), io::Error> {
 
     let map = read_btree_leaves(&mut cursor, volume_header.block_size as usize)?;
 
+    // Find the first available file node in the map
+    let f = map.values().find(|v| match v {
+        CatalogLeafRecord::File(_) => true,
+        _ => false,
+    });
+    if let Some(CatalogLeafRecord::File(file_record)) = f {
+        dbg!(file_record);
+        // Look up cnid with empty name to find file thread
+        let key_length = 6u16; // Size of cnid + empty name
+        let cnid = file_record.file_id;
+        let mut key = Vec::<u8>::with_capacity(2 + key_length as usize);
+        key.extend_from_slice(key_length.to_be_bytes().as_slice());
+        key.extend_from_slice(cnid.to_be_bytes().as_slice());
+        key.extend(&[0u8; 2]);
+        dbg!(&key);
+
+        let found = map.contains_key(&key);
+        dbg!(found);
+    }
+
     Ok(())
 }
 
@@ -187,11 +207,11 @@ fn read_btree_leaves(
         }
 
         // Print basic node information and record count
-        println!(
-            "Node {n} - {:?}: {} Records",
-            node_header.kind,
-            records.len()
-        );
+        // println!(
+        //     "Node {n} - {:?}: {} Records",
+        //     node_header.kind,
+        //     records.len()
+        // );
 
         // WIP: Focus on Leaf Nodes
         if node_header.kind != BTreeNodeKind::kBTLeafNode {
@@ -207,10 +227,10 @@ fn read_btree_leaves(
                     .iter()
                     .filter(|extent| extent.block_count > 0)
                     .count();
-                println!(
-                    "\t\t{} bytes in {} blocks across {} extents",
-                    file.data_fork.logical_size, file.data_fork.total_blocks, active_extents
-                );
+                // println!(
+                //     "\t\t{} bytes in {} blocks across {} extents",
+                //     file.data_fork.logical_size, file.data_fork.total_blocks, active_extents
+                // );
             };
 
             btree.insert(key, leaf_record);
