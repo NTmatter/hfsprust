@@ -1,5 +1,6 @@
 use deku::DekuContainerRead;
 use hfsprust::*;
+use itertools::Itertools;
 use std::env;
 use std::fs::File;
 use std::io::{self, Cursor, Read, Seek, SeekFrom};
@@ -80,7 +81,7 @@ fn read_btree_node(
     stream: &mut (impl Read + Seek),
     block_size: usize,
     record_size: usize,
-) -> Result<(BTreeNodeDescriptor, Vec<u16>), io::Error> {
+) -> Result<(BTreeNodeDescriptor, Vec<Vec<u8>>), io::Error> {
     // Consume entire record and operate on in-memory cursor.
     let mut record = vec![0u8; record_size];
     stream.read_exact(&mut record)?;
@@ -106,8 +107,19 @@ fn read_btree_node(
     }
     offsets.reverse();
 
+    // Extract record data
+    let mut records = Vec::<Vec<u8>>::with_capacity(offsets.len() - 1);
+    for (start, end) in offsets.into_iter().tuple_windows() {
+        let len = end - start;
+        let mut buf = vec![0u8; len as usize];
+        cursor.seek(SeekFrom::Start(start as u64))?;
+        cursor.read_exact(&mut buf)?;
+
+        records.push(buf);
+    }
+
     // Extract records
-    Ok((node_descriptor, offsets))
+    Ok((node_descriptor, records))
 }
 
 fn read_btree_header(
@@ -155,6 +167,8 @@ fn read_btree(mut stream: &mut (impl Read + Seek), block_size: usize) -> Result<
     let node_size = btree_header_record.node_size as usize;
     let total_nodes = btree_header_record.total_nodes as usize;
 
+    // TODO Consider restarting parse from header node
+
     // Read all nodes, skipping empties.
     for n in 1..total_nodes {
         let res = read_btree_node(&mut stream, block_size, node_size);
@@ -163,17 +177,17 @@ fn read_btree(mut stream: &mut (impl Read + Seek), block_size: usize) -> Result<
             continue;
         }
 
-        let (node_header, offsets) = res.unwrap();
+        let (node_header, records) = res.unwrap();
         if node_header.num_records > 0 {
             println!(
-                "Node {n}   kind={:?}   records[{}]={:?}",
+                "Node {n}   kind={:?}   records[{}]",
                 node_header.kind,
-                offsets.len(),
-                offsets
+                records.len()
             );
         }
     }
-    todo!("Parse all BTree nodes")
+
+    todo!("Assemble BTree from constituent records")
 }
 
 /// Read all extents for a Fork. Does not handle Overflow extents.

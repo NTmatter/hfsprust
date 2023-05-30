@@ -16,3 +16,4 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 deku = "0.16.0"
+itertools = "0.10.5"

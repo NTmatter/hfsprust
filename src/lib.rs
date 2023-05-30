@@ -346,7 +346,7 @@ impl BTreeAllocationMapRecord {
     fn isBlockUsed(&self, allocation_block: u32) -> bool {
         // TODO handle overflow?
         let offset = allocation_block / 8;
-        let this_byte = self.bitmap[offset];
+        let this_byte = self.bitmap[offset as usize];
         let bit_mask = 1 << (7 - (allocation_block & 8));
 
         let is_set = this_byte & bit_mask != 0;
