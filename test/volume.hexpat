@@ -75,24 +75,36 @@ struct BTHeaderRec {
   be u32 clumpSize;
   u8 btreeType;
   u8 keyCompareType;
-  u32 attributes;
-  u32 reserved3[16];
+  be u32 attributes;
+  be u32 reserved3[16];
 };
 
-struct BTNode {
+struct BTreeNode8k {
   BTNodeDescriptor descriptor;
-  BTHeaderRec header;
+
+  u8 payload[8192 - 14 - 2 * descriptor.numRecords];
+
+  be u16 recordOffsets[descriptor.numRecords];
 };
 
 struct BTree {
-  BTNode node;
+  // Inline the Header node
+  BTNodeDescriptor headerNodeDescriptor;
+  BTHeaderRec headerNodeRecord;
+  u8 headerNodeUserData[128]; // Opaque, reserved
+  u8 allocationMap[headerNodeRecord.nodeSize - 256];
+  be u16 recordOffsets[headerNodeDescriptor.numRecords + 1];
+
+  BTreeNode8k node[10];
 };
 
 struct HFSVolume {
     u8 preamble[1024];
     HFSPlusVolumeHeader header;
-    
+    u8 allocationFile[header.allocationFile.extents[0].blockCount * header.blockSize] @ header.allocationFile.extents[0].startBlock * header.blockSize;
+    // BTree extentFile @ header.extentsFile.extents[0].startBlock * header.blockSize;
     BTree catalogFile @ header.catalogFile.extents[0].startBlock * header.blockSize;
+    // BTree attributesFile @ header.attributesFile.extents[0].startBlock * header.blockSize;
 };
 
 HFSVolume volume @0x00;

@@ -40,8 +40,6 @@ fn main() -> Result<(), io::Error> {
 
     let (_rest, volume_header) = VolumeHeader::from_bytes((&buf, 0)).expect("Parse volume header");
 
-    dbg!(&volume_header);
-
     // Extract useful information:
     println!("Sucessfully parsed volume header.");
     let block_size = volume_header.block_size as usize;
@@ -57,32 +55,6 @@ fn main() -> Result<(), io::Error> {
     println!("start block: {}", catalog_start_block);
     let catalog_block_count = volume_header.catalog_file.extents[0].block_count as usize;
     println!("blocks: {}", catalog_block_count);
-
-    // Have a look at the Catalog File and try to examine the directory tree.
-    // Assume that it's a single extent for now, noting that it is possible for
-    // the file to be spread over multiple non-contiguous extents, and possibly
-    // non-contiguous overflow extents as well.
-    let catalog_data_start: usize = catalog_start_block * block_size;
-    let btree_node_descriptor = read_node_descriptor(&test_file, catalog_data_start as u64);
-
-    if btree_node_descriptor.is_err() {
-        eprintln!(
-            "Failed to read first btree node descriptor: {}",
-            btree_node_descriptor.unwrap_err()
-        );
-    } else {
-        dbg!(btree_node_descriptor.unwrap());
-    }
-
-    const BTREE_NODE_DESCRIPTOR_LENGTH: usize = 14;
-    let btree_start = catalog_data_start + BTREE_NODE_DESCRIPTOR_LENGTH;
-
-    let btree_header = read_btree_header(&test_file, btree_start as u64);
-    if btree_header.is_err() {
-        eprintln!("Failed to read btree header: {}", btree_header.unwrap_err());
-    } else {
-        dbg!(btree_header.unwrap());
-    };
 
     let catalog_extents = assemble_extents(
         &mut test_file,
@@ -104,38 +76,43 @@ fn main() -> Result<(), io::Error> {
     Ok(())
 }
 
-fn read_node_descriptor(file: &File, offset: u64) -> Result<BTreeNodeDescriptor, io::Error> {
-    const BTREE_NODE_DESCRIPTOR_LENGTH: usize = 14;
+fn read_btree_node(
+    stream: &mut (impl Read + Seek),
+    block_size: usize,
+    record_size: usize,
+) -> Result<(BTreeNodeDescriptor, Vec<u16>), io::Error> {
+    // Consume entire record and operate on in-memory cursor.
+    let mut record = vec![0u8; record_size];
+    stream.read_exact(&mut record)?;
 
-    let mut buf = [0u8; BTREE_NODE_DESCRIPTOR_LENGTH];
-    let _ = file.read_exact_at(&mut buf, offset)?;
+    let mut cursor = Cursor::new(record);
 
-    let (_rest, descriptor) = BTreeNodeDescriptor::from_bytes((&mut buf, 0))?;
-
-    Ok(descriptor)
-}
-
-fn read_btree_header(file: &File, offset: u64) -> Result<BTreeHeaderRecord, io::Error> {
-    // Try to have a look at the BTree Header Record
-    const BTREE_HEADER_LENGTH: usize = 106;
-    let mut buf = [0u8; BTREE_HEADER_LENGTH];
-    let _ = file.read_exact_at(&mut buf, offset)?;
-
-    let (_rest, btree_header) = BTreeHeaderRecord::from_bytes((&mut buf, 0))?;
-
-    Ok(btree_header)
-}
-
-fn read_btree_node(stream: &mut (impl Read + Seek), block_size: usize) -> Result<(), io::Error> {
-    // Read Nde Descriptor
+    // Read Node Descriptor
     let mut buf = [0; BTreeNodeDescriptor::SIZE];
-    stream.read_exact(&mut buf)?;
+    cursor.read_exact(&mut buf)?;
     let (_rest, node_descriptor) = BTreeNodeDescriptor::from_bytes((&mut buf, 0))?;
 
-    Ok(())
+    // Read record offsets and free space offset from end of node.
+    let offset_count = node_descriptor.num_records as usize + 1;
+    let mut offsets = Vec::<u16>::with_capacity(offset_count);
+    let seek_offset = record_size - BTreeNodeDescriptor::SIZE - 2 * offset_count;
+    cursor.seek(SeekFrom::Current(seek_offset as i64))?;
+    for _ in 0..=(node_descriptor.num_records) {
+        let mut buf = [0u8; 2];
+        cursor.read_exact(&mut buf)?;
+        let offset = u16::from_be_bytes(buf);
+        offsets.push(offset);
+    }
+    offsets.reverse();
+
+    // Extract records
+    Ok((node_descriptor, offsets))
 }
 
-fn read_btree(stream: &mut (impl Read + Seek), block_size: usize) -> Result<(), io::Error> {
+fn read_btree_header(
+    stream: &mut (impl Read + Seek),
+    block_size: usize,
+) -> Result<(BTreeNodeDescriptor, BTreeHeaderRecord), io::Error> {
     // Read BTree Descriptor
     let mut buf = [0; BTreeNodeDescriptor::SIZE];
     stream.read_exact(&mut buf)?;
@@ -159,9 +136,13 @@ fn read_btree(stream: &mut (impl Read + Seek), block_size: usize) -> Result<(), 
     let mut buf = vec![0u8; map_record_size as usize];
     stream.read_exact(&mut buf)?;
 
+    let mut buf = [0u8; 2];
+    stream.read_exact(&mut buf)?;
+    let _free_space_offset = u16::from_be_bytes(buf);
+
     // Parse offsets at end of header node
-    let mut offsets = Vec::<u16>::with_capacity((node_descriptor.num_records + 1) as usize);
-    for _ in 0..(node_descriptor.num_records + 1) {
+    let mut offsets = Vec::<u16>::with_capacity((node_descriptor.num_records) as usize);
+    for _ in 0..(node_descriptor.num_records) {
         let mut buf = [0u8; 2];
         stream.read_exact(&mut buf)?;
         let offset = u16::from_be_bytes(buf);
@@ -169,7 +150,34 @@ fn read_btree(stream: &mut (impl Read + Seek), block_size: usize) -> Result<(), 
     }
     offsets.reverse();
 
-    Ok(())
+    Ok((node_descriptor, btree_header))
+}
+
+fn read_btree(mut stream: &mut (impl Read + Seek), block_size: usize) -> Result<(), io::Error> {
+    let (_node_descriptor, btree_header_record) = read_btree_header(&mut stream, block_size)?;
+    let node_size = btree_header_record.node_size as usize;
+    let total_nodes = btree_header_record.total_nodes as usize;
+
+    // Read all nodes, skipping empties.
+    for n in 1..total_nodes {
+        let res = read_btree_node(&mut stream, block_size, node_size);
+        if res.is_err() {
+            eprintln!("Node {n} failed: {}", res.unwrap_err());
+            continue;
+        }
+
+        let (node_header, offsets) = res.unwrap();
+        if node_header.num_records > 0 {
+            println!(
+                "Node {n}   kind={:?}   records[{}]={:?}",
+                node_header.kind,
+                offsets.len(),
+                offsets
+            );
+        }
+    }
+
+    todo!("Parse all BTree nodes")
 }
 
 /// Read all extents for a Fork. Does not handle Overflow extents.
