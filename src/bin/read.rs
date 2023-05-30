@@ -221,50 +221,7 @@ fn read_btree_leaves(
 }
 
 fn parse_catalog_leaf(record: &Vec<u8>) -> Result<(Vec<u8>, CatalogLeafRecord), io::Error> {
-    let mut cur = Cursor::new(record);
-
-    // Are we actually trying to read a Catalog File Key here?
-
-    // Key Length: u16, as per TN1150 > Keyed Records. Might vary for non-leaves.
-    let mut buf = [0u8; 2];
-    cur.read_exact(&mut buf)?;
-    let key_length = u16::from_be_bytes(buf);
-
-    // Key Data
-    let mut key: BTreeKey = vec![0u8; key_length as usize];
-    cur.read_exact(&mut key)?;
-
-    let mut key_cur = Cursor::new(&key);
-
-    // Key: Parent CNID
-    let mut buf = [0u8; 4];
-    key_cur.read_exact(&mut buf)?;
-    let parent_cnid = u32::from_be_bytes(buf);
-
-    // Key: String Length
-    let mut buf = [0u8; 2];
-    key_cur.read_exact(&mut buf)?;
-    let char_count = u16::from_be_bytes(buf) as usize;
-
-    // Key: File Name
-    let mut name = Vec::<u16>::new();
-    for _ in 0..char_count {
-        let mut buf = [0u8; 2];
-        key_cur.read_exact(&mut buf)?;
-        let char = u16::from_be_bytes(buf);
-        name.push(char);
-    }
-    let name = String::from_utf16_lossy(&name);
-
-    // Alignment
-    if key_length % 2 == 1 {
-        eprintln!("Found odd key length! Consume padding.");
-        // Consider: cur.consume(1);
-        cur.read_exact(&mut [0u8; 1])?;
-    }
-
-    let mut rest = Vec::<u8>::new();
-    cur.read_to_end(&mut rest)?;
+    let ((rest, _remaining), key) = CatalogFileKey::from_bytes((record, 0))?;
 
     // Peek at record kind
     let mut buf = vec![rest[0], rest[1]];
@@ -290,11 +247,7 @@ fn parse_catalog_leaf(record: &Vec<u8>) -> Result<(Vec<u8>, CatalogLeafRecord), 
         }
     };
 
-    println!(
-        "\t{kind:?} key[{key_length}]: {parent_cnid:x?}:'{name}' payload[{}]",
-        rest.len()
-    );
-    Ok((key, record))
+    Ok((key.into(), record))
 }
 
 /// Concatenate all of a fork's extents into a single buffer. Does not handle Overflow extents yet.

@@ -3,8 +3,9 @@
 
 use deku::bitvec::{BitSlice, Msb0};
 use deku::prelude::*;
-use std::fmt;
 use std::fmt::Formatter;
+use std::io::{Cursor, Read};
+use std::{fmt, io};
 
 /// Unicode 2.0 String. Defined in TN1150 > HFS Plus Names.
 /// Strings are stored fully-decomposed in canonical order.
@@ -379,10 +380,82 @@ impl BTreeAllocationMapRecord {
 #[derive(DekuRead)]
 pub struct CatalogFileKey {
     #[deku(endian = "big")]
-    length: u16,
+    pub length: u16,
     #[deku(endian = "big")]
-    parent: CatalogNodeId,
-    name: HFSUniStr255,
+    pub parent: CatalogNodeId,
+    pub name: HFSUniStr255,
+}
+
+impl TryFrom<Vec<u8>> for CatalogFileKey {
+    type Error = io::Error;
+
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        let mut cur = Cursor::new(value);
+
+        // Are we actually trying to read a Catalog File Key here?
+
+        // Key Length: u16, as per TN1150 > Keyed Records. Might vary for non-leaves.
+        let mut buf = [0u8; 2];
+        cur.read_exact(&mut buf)?;
+        let length = u16::from_be_bytes(buf);
+
+        // Key Data
+        let mut key: BTreeKey = vec![0u8; length as usize];
+        cur.read_exact(&mut key)?;
+
+        let mut key_cur = Cursor::new(&key);
+
+        // Key: Parent CNID
+        let mut buf = [0u8; 4];
+        key_cur.read_exact(&mut buf)?;
+        let parent = CatalogNodeId::from_be_bytes(buf);
+
+        // Key: String Length
+        let mut buf = [0u8; 2];
+        key_cur.read_exact(&mut buf)?;
+        let char_count = u16::from_be_bytes(buf) as usize;
+
+        // Key: File Name
+        let mut string = vec![0u16; 255];
+        for i in 0..char_count {
+            let mut buf = [0u8; 2];
+            key_cur.read_exact(&mut buf)?;
+            let char = u16::from_be_bytes(buf);
+            string[i] = char;
+        }
+
+        let name = HFSUniStr255 {
+            length: char_count as u16,
+            string,
+        };
+
+        Ok(Self {
+            length,
+            parent,
+            name,
+        })
+    }
+}
+
+impl Into<Vec<u8>> for CatalogFileKey {
+    fn into(self) -> Vec<u8> {
+        let len = 2 // Key Length (u16) 
+            + 4 // Parent CNID (u32) 
+            + 2 // Name Length (u16) 
+            + 2 * self.name.length // Bytes
+            ;
+
+        let mut out = Vec::<u8>::with_capacity(len as usize);
+        out.extend_from_slice(len.to_be_bytes().as_slice());
+        out.extend_from_slice(self.parent.to_be_bytes().as_slice());
+        out.extend_from_slice(self.name.length.to_be_bytes().as_slice());
+        self.name
+            .string
+            .iter()
+            .for_each(|c16| out.extend_from_slice(c16.to_be_bytes().as_slice()));
+
+        out
+    }
 }
 
 /// Type of data contained in this catalog file.
