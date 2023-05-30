@@ -3,7 +3,7 @@ use hfsprust::*;
 use itertools::Itertools;
 use std::env;
 use std::fs::File;
-use std::io::{self, Cursor, Read, Seek, SeekFrom};
+use std::io::{self, BufRead, Cursor, Read, Seek, SeekFrom};
 use std::os::unix::prelude::FileExt;
 
 fn main() -> Result<(), io::Error> {
@@ -216,41 +216,25 @@ fn parse_catalog_leaf(record: &Vec<u8>) -> Result<(), io::Error> {
     let mut key = vec![0u8; key_length as usize];
     cur.read_exact(&mut key)?;
 
-    // Data Alignment:
+    // Alignment
     if key_length % 2 == 1 {
-        cur.read_exact(&mut [0u8; 1])?
+        eprintln!("Found odd key length! Consuming padding.");
+        // Consider: cur.consume(1);
+        cur.read_exact(&mut [0u8; 1])?;
     }
 
-    // Parent CNID -- Where is this actually coming from? We might have a u16/32 for recordType
-    // followed by its data. ParentCNID might only be relevant for Index Nodes.
-    let mut buf = [0u8; 4];
-    cur.read_exact(&mut buf)?;
-    let parent_cnid = u32::from_be_bytes(buf);
-
-    // Node Name (may be empty string)
+    // Record Kind
     let mut buf = [0u8; 2];
     cur.read_exact(&mut buf)?;
-    let name_len = u16::from_be_bytes(buf);
-
-    // Build name string, if any. This might be irrelevant.
-    let mut name_bytes = vec![0u16; name_len as usize];
-    for _ in 0..name_len {
-        let mut buf = [0u8; 2];
-        cur.read_exact(&mut buf)?;
-        let char = u16::from_be_bytes(buf);
-        name_bytes.push(char);
-    }
-    let name = String::from_utf16_lossy(name_bytes.as_mut_slice());
-
-    let mut buf = [0u8; 2];
-    cur.read_exact(&mut buf)?;
-    let mystery = u16::from_be_bytes(buf);
+    let (_rest, kind) = CatalogFileDataType::from_bytes((&mut buf, 0))?;
 
     let mut rest = Vec::<u8>::new();
     cur.read_to_end(&mut rest)?;
 
-    println!("\tkey[{key_length}]: {key:x?}\tparent: {parent_cnid:x}\tname[{name_len}]: '{name}'");
-    println!("\t\tdata[{:x}]: {rest:x?}", rest.len());
+    println!(
+        "\t{kind:?} key[{key_length}]: {key:x?} payload[{}]",
+        rest.len()
+    );
     Ok(())
 }
 

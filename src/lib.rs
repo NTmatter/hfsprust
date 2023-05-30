@@ -14,7 +14,7 @@ struct HFSUniStr255 {
 /// Defined in TN1150 > Text Encodings.
 #[repr(u32)]
 #[allow(clippy::enum_variant_names)]
-enum TextEncoding {
+pub enum TextEncoding {
     MacRoman = 0,
     MacJapanese = 1,
     MacChineseTriad = 2,
@@ -64,7 +64,7 @@ type Date = u32;
 
 /// Type-dependent file information. Defined in `struct HFSPlusBSDInfo.special`
 /// in TN1150 > HFS Plus Permissions.
-union BsdInfoSpecial {
+pub union BsdInfoSpecial {
     inode_number: u32,
     link_count: u32,
     raw_device: u32,
@@ -72,7 +72,7 @@ union BsdInfoSpecial {
 
 /// File and Folder permissions. Defined as `struct HFSPlusBSDInfo` in
 /// TN1150 > HFS Plus Permissions.
-struct BsdInfo {
+pub struct BsdInfo {
     owner_id: u32,
     group_id: u32,
     admin_flags: u8,
@@ -367,18 +367,24 @@ struct CatalogFileKey {
 /// Defined in documentation for `struct HFSPlusCatalogKey` in
 /// TN1150 > Catalog File Data.
 #[allow(non_camel_case_types, clippy::enum_variant_names)]
+#[derive(Debug, PartialEq, DekuRead)]
+#[deku(type = "u16", endian = "big")]
 #[repr(u16)]
-enum CatalogFileDataType {
+pub enum CatalogFileDataType {
     kHFSPlusFolderRecord = 0x0001,
     kHFSPlusFileRecord = 0x0002,
     kHFSPlusFolderThreadRecord = 0x0003,
     kHFSPlusFileThreadRecord = 0x0004,
 }
 
-/// Type of data contained in this catalog file.
+/// Helper definitions for inspecting legacy HFS, which used
+/// one byte to store the record type followed by a reserved byte.
+/// When parsing a legacy HFS volume, the endianness will be
+/// switched as a result.
 /// Defined in documentation for `struct HFSPlusCatalogKey` in
 /// TN1150 > Catalog File Data.
 #[allow(non_camel_case_types, clippy::enum_variant_names)]
+#[deprecated]
 #[repr(u16)]
 enum CatalogFolderDataType {
     kHFSFolderRecord = 0x0100,
@@ -419,22 +425,22 @@ enum BTreeKeyCompareType {
 
 /// BTree leaf node for Folders. Defined as `struct HFSPlusCatalogFolder`
 /// in TN1150 > Catalog Folder Records
-struct CatalogFolder {
+pub struct CatalogFolder {
     /// Always CatalogFolderDataType::kHFSPlusFolderRecord
-    record_type: CatalogFolderDataType,
-    flags: u16,
-    valence: u32,
-    folder_id: CatalogNodeId,
-    create_date: Date,
-    content_mod_date: Date,
-    attribute_mod_date: Date,
-    access_date: Date,
-    backup_date: Date,
-    permissions: BsdInfo,
-    user_info: FolderInfo,
-    ifnder_info: ExtendedFolderInfo,
-    text_encoding: TextEncoding,
-    reserved: u32,
+    pub record_type: CatalogFileDataType,
+    pub flags: u16,
+    pub valence: u32,
+    pub folder_id: CatalogNodeId,
+    pub create_date: Date,
+    pub content_mod_date: Date,
+    pub attribute_mod_date: Date,
+    pub access_date: Date,
+    pub backup_date: Date,
+    pub permissions: BsdInfo,
+    pub user_info: FolderInfo,
+    pub finder_info: ExtendedFolderInfo,
+    pub text_encoding: TextEncoding,
+    pub reserved: u32,
 }
 
 /// Defined in documentation for `struct HFSPlusCatalogFile` in
@@ -457,29 +463,29 @@ enum CatalogFileBitMask {
 
 /// BTree leaf node for Files. Defined as `struct HFSPlusCatalogFile` in
 /// TN1150 > Catalog File Records
-struct CatalogFile {
-    record_type: CatalogFileDataType,
-    ///
-    flags: u16,
-    reserved_1: u32,
-    file_id: CatalogNodeId,
-    create_date: Date,
-    content_mod_date: Date,
-    attribute_mod_date: Date,
-    backup_date: Date,
-    permissions: BsdInfo,
-    finder_info: ExtendedFileInfo,
-    text_encoding: TextEncoding,
-    reserved_2: u32,
+pub struct CatalogFile {
+    pub record_type: CatalogFileDataType,
+    pub flags: u16,
+    pub reserved_1: u32,
+    pub file_id: CatalogNodeId,
+    pub create_date: Date,
+    pub content_mod_date: Date,
+    pub attribute_mod_date: Date,
+    pub backup_date: Date,
+    pub permissions: BsdInfo,
+    pub user_info: FileInfo,
+    pub finder_info: ExtendedFileInfo,
+    pub text_encoding: TextEncoding,
+    pub reserved_2: u32,
 
-    data_fork: ForkData,
-    resource_fork: ForkData,
+    pub data_fork: ForkData,
+    pub resource_fork: ForkData,
 }
 
 /// BTree link to CNID. Defined as `struct HFSPlusCatalogThread` in
 /// TN1150 > Catalog Thread Records.
 struct CatalogThread {
-    record_type: CatalogFolderDataType,
+    record_type: CatalogFileDataType,
     reserved: i16,
     parent_id: CatalogNodeId,
     node_name: HFSUniStr255,
@@ -507,7 +513,7 @@ type OSType = u32;
 
 /// Presentation info for Finder.
 /// Defined in TN1150 > Finder Info.
-struct FileInfo {
+pub struct FileInfo {
     file_type: OSType,
     file_creator: OSType,
     finder_flags: u16,
@@ -517,7 +523,7 @@ struct FileInfo {
 
 /// Additional file information for display in Finder
 /// Defined in TN1150 > Finder Info.
-struct ExtendedFileInfo {
+pub struct ExtendedFileInfo {
     reserved_1: [i16; 4],
     extended_finder_flags: u16,
     reserved_2: i16,
@@ -560,7 +566,7 @@ enum FileInfoFinderFlags {
 
 /// Finder Metadata and display information
 /// Defined in TN1150 > Finder Info.
-struct FolderInfo {
+pub struct FolderInfo {
     window_bounds: Rect,
     finder_flags: u16,
     location: Point,
@@ -569,10 +575,10 @@ struct FolderInfo {
 
 /// Finder Metadata and display information
 /// Defined in TN1150 > Finder Info.
-struct ExtendedFolderInfo {
+pub struct ExtendedFolderInfo {
     scroll_position: Point,
     reserved_1: i32,
-    extened_finder_flags: u16,
+    extended_finder_flags: u16,
     reserved_2: i16,
     put_away_folder_id: i32,
 }
