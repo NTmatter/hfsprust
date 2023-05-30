@@ -281,7 +281,7 @@ impl BTreeNodeDescriptor {
 /// Known values for BTreeNodeDescriptor::kind.
 /// Defined in docs for `struct BTNodeDescriptor` in TN1150 > Catalog File.
 #[allow(non_camel_case_types, clippy::enum_variant_names)]
-#[derive(Debug, DekuRead)]
+#[derive(Debug, PartialEq, DekuRead)]
 #[deku(type = "i8")]
 #[repr(i8)]
 pub enum BTreeNodeKind {

@@ -170,7 +170,7 @@ fn read_btree(mut stream: &mut (impl Read + Seek), block_size: usize) -> Result<
     // TODO Consider restarting parse from header node
 
     // Read all nodes, skipping empties.
-    for n in 1..total_nodes {
+    for n in 1..10 {
         let res = read_btree_node(&mut stream, block_size, node_size);
         if res.is_err() {
             eprintln!("Node {n} failed: {}", res.unwrap_err());
@@ -178,16 +178,80 @@ fn read_btree(mut stream: &mut (impl Read + Seek), block_size: usize) -> Result<
         }
 
         let (node_header, records) = res.unwrap();
-        if node_header.num_records > 0 {
-            println!(
-                "Node {n}   kind={:?}   records[{}]",
-                node_header.kind,
-                records.len()
-            );
+
+        // Ignore empty nodes
+        if node_header.num_records == 0 {
+            continue;
         }
+
+        // Print basic node information and record count
+        println!(
+            "Node {n} - {:?}: {} Records",
+            node_header.kind,
+            records.len()
+        );
+
+        // WIP: Focus on Leaf Nodes
+        if node_header.kind != BTreeNodeKind::kBTLeafNode {
+            continue;
+        }
+
+        records.iter().try_for_each(parse_catalog_leaf)?;
     }
 
     todo!("Assemble BTree from constituent records")
+}
+
+fn parse_catalog_leaf(record: &Vec<u8>) -> Result<(), io::Error> {
+    let mut cur = Cursor::new(record);
+
+    // Are we actually trying to read a Catalog File Key here?
+
+    // Key Length: u16, as per TN1150 > Keyed Records. Might vary for non-leaves.
+    let mut buf = [0u8; 2];
+    cur.read_exact(&mut buf)?;
+    let key_length = u16::from_be_bytes(buf);
+
+    // Key
+    let mut key = vec![0u8; key_length as usize];
+    cur.read_exact(&mut key)?;
+
+    // Data Alignment:
+    if key_length % 2 == 1 {
+        cur.read_exact(&mut [0u8; 1])?
+    }
+
+    // Parent CNID -- Where is this actually coming from? We might have a u16/32 for recordType
+    // followed by its data. ParentCNID might only be relevant for Index Nodes.
+    let mut buf = [0u8; 4];
+    cur.read_exact(&mut buf)?;
+    let parent_cnid = u32::from_be_bytes(buf);
+
+    // Node Name (may be empty string)
+    let mut buf = [0u8; 2];
+    cur.read_exact(&mut buf)?;
+    let name_len = u16::from_be_bytes(buf);
+
+    // Build name string, if any. This might be irrelevant.
+    let mut name_bytes = vec![0u16; name_len as usize];
+    for _ in 0..name_len {
+        let mut buf = [0u8; 2];
+        cur.read_exact(&mut buf)?;
+        let char = u16::from_be_bytes(buf);
+        name_bytes.push(char);
+    }
+    let name = String::from_utf16_lossy(name_bytes.as_mut_slice());
+
+    let mut buf = [0u8; 2];
+    cur.read_exact(&mut buf)?;
+    let mystery = u16::from_be_bytes(buf);
+
+    let mut rest = Vec::<u8>::new();
+    cur.read_to_end(&mut rest)?;
+
+    println!("\tkey[{key_length}]: {key:x?}\tparent: {parent_cnid:x}\tname[{name_len}]: '{name}'");
+    println!("\t\tdata[{:x}]: {rest:x?}", rest.len());
+    Ok(())
 }
 
 /// Read all extents for a Fork. Does not handle Overflow extents.
