@@ -1,6 +1,6 @@
 use deku::DekuContainerRead;
 use hfsprust::*;
-use itertools::Itertools;
+use itertools::{rciter, Itertools};
 use std::env;
 use std::fs::File;
 use std::io::{self, BufRead, Cursor, Read, Seek, SeekFrom};
@@ -45,34 +45,24 @@ fn main() -> Result<(), io::Error> {
     println!("Sucessfully parsed volume header.");
     let block_size = volume_header.block_size as usize;
     println!("Block Size: {}", block_size);
-    // TODO Read Mounted/Unmounted attributes
     println!("Catalog File:");
-    println!("blocks: {}", &volume_header.catalog_file.total_blocks);
-    println!("logical_size: {}", &volume_header.catalog_file.logical_size);
-    println!("clump_size: {}", &volume_header.catalog_file.logical_size);
+    println!("\tblocks: {}", &volume_header.catalog_file.total_blocks);
+    println!(
+        "\tlogical_size: {}",
+        &volume_header.catalog_file.logical_size
+    );
     println!();
-    println!("extent descriptor 0:");
-    let catalog_start_block = volume_header.catalog_file.extents[0].start_block as usize;
-    println!("start block: {}", catalog_start_block);
-    let catalog_block_count = volume_header.catalog_file.extents[0].block_count as usize;
-    println!("blocks: {}", catalog_block_count);
 
     let catalog_extents = assemble_extents(
         &mut test_file,
         &volume_header.catalog_file,
         volume_header.block_size as usize,
     )?;
+    println!("Assembled Catalog Extents.");
+    println!("\tTotal Size: {}", &catalog_extents.len());
+
     let mut cursor = Cursor::new(catalog_extents);
-
-    read_btree(&mut cursor, volume_header.block_size as usize)?;
-
-    let allocation_file = assemble_extents(
-        &mut test_file,
-        &volume_header.allocation_file,
-        volume_header.block_size as usize,
-    )?;
-
-    println!("Allocation File Bitmap is {} bytes", allocation_file.len());
+    read_btree_leaves(&mut cursor, volume_header.block_size as usize)?;
 
     Ok(())
 }
@@ -122,6 +112,7 @@ fn read_btree_node(
     Ok((node_descriptor, records))
 }
 
+/// Manually read the BTree header to bootstrap the rest of the read.
 fn read_btree_header(
     stream: &mut (impl Read + Seek),
     block_size: usize,
@@ -162,7 +153,10 @@ fn read_btree_header(
     Ok((node_descriptor, btree_header))
 }
 
-fn read_btree(mut stream: &mut (impl Read + Seek), block_size: usize) -> Result<(), io::Error> {
+fn read_btree_leaves(
+    mut stream: &mut (impl Read + Seek),
+    block_size: usize,
+) -> Result<(), io::Error> {
     let (_node_descriptor, btree_header_record) = read_btree_header(&mut stream, block_size)?;
     let node_size = btree_header_record.node_size as usize;
     let total_nodes = btree_header_record.total_nodes as usize;
@@ -196,13 +190,15 @@ fn read_btree(mut stream: &mut (impl Read + Seek), block_size: usize) -> Result<
             continue;
         }
 
-        records.iter().try_for_each(parse_catalog_leaf)?;
+        records.iter().for_each(|record| {
+            let _ = parse_catalog_leaf(&record);
+        });
     }
 
     todo!("Assemble BTree from constituent records")
 }
 
-fn parse_catalog_leaf(record: &Vec<u8>) -> Result<(), io::Error> {
+fn parse_catalog_leaf(record: &Vec<u8>) -> Result<(Vec<u8>, CatalogLeafRecord), io::Error> {
     let mut cur = Cursor::new(record);
 
     // Are we actually trying to read a Catalog File Key here?
@@ -212,8 +208,8 @@ fn parse_catalog_leaf(record: &Vec<u8>) -> Result<(), io::Error> {
     cur.read_exact(&mut buf)?;
     let key_length = u16::from_be_bytes(buf);
 
-    // Key
-    let mut key = vec![0u8; key_length as usize];
+    // Key Data
+    let mut key: BTreeKey = vec![0u8; key_length as usize];
     cur.read_exact(&mut key)?;
 
     let mut key_cur = Cursor::new(&key);
@@ -245,22 +241,41 @@ fn parse_catalog_leaf(record: &Vec<u8>) -> Result<(), io::Error> {
         cur.read_exact(&mut [0u8; 1])?;
     }
 
-    // Record Kind
-    let mut buf = [0u8; 2];
-    cur.read_exact(&mut buf)?;
-    let (_rest, kind) = CatalogFileDataType::from_bytes((&mut buf, 0))?;
-
     let mut rest = Vec::<u8>::new();
     cur.read_to_end(&mut rest)?;
+
+    // Peek at record kind
+    let mut buf = vec![rest[0], rest[1]];
+    let (_rest, kind) = CatalogFileDataType::from_bytes((&mut buf, 0))?;
+
+    // Parse payload
+    let record = match kind {
+        CatalogFileDataType::kHFSPlusFolderRecord => {
+            let (_rest, folder) = CatalogFolder::from_bytes((&rest, 0))?;
+            CatalogLeafRecord::Folder(folder)
+        }
+        CatalogFileDataType::kHFSPlusFileRecord => {
+            let (_rest, file) = CatalogFile::from_bytes((&rest, 0))?;
+            CatalogLeafRecord::File(file)
+        }
+        CatalogFileDataType::kHFSPlusFolderThreadRecord => {
+            let (_rest, folder_thread) = CatalogThread::from_bytes((&rest, 0))?;
+            CatalogLeafRecord::FolderThread(folder_thread)
+        }
+        CatalogFileDataType::kHFSPlusFileThreadRecord => {
+            let (_rest, file_thread) = CatalogThread::from_bytes((&rest, 0))?;
+            CatalogLeafRecord::FileThread(file_thread)
+        }
+    };
 
     println!(
         "\t{kind:?} key[{key_length}]: {parent_cnid:x?}:'{name}' payload[{}]",
         rest.len()
     );
-    Ok(())
+    Ok((key, record))
 }
 
-/// Read all extents for a Fork. Does not handle Overflow extents.
+/// Concatenate all of a fork's extents into a single buffer. Does not handle Overflow extents yet.
 fn assemble_extents(
     stream: &mut (impl Read + Seek),
     fork_data: &ForkData,

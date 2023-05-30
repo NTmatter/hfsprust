@@ -1,19 +1,27 @@
 #![forbid(unsafe_code)]
 #![allow(dead_code)]
 
+use deku::bitvec::{BitSlice, Msb0};
 use deku::prelude::*;
+use std::fmt;
+use std::fmt::Formatter;
 
 /// Unicode 2.0 String. Defined in TN1150 > HFS Plus Names.
 /// Strings are stored fully-decomposed in canonical order.
-struct HFSUniStr255 {
-    length: u16,
-    unicode: [u16; 255],
+#[derive(Debug, DekuRead)]
+pub struct HFSUniStr255 {
+    #[deku(endian = "big")]
+    pub length: u16,
+    #[deku(count = "length", endian = "big")]
+    pub string: Vec<u16>,
 }
 
 /// Encoding for conversion to MacOS-encoded Pascal String.
 /// Defined in TN1150 > Text Encodings.
 #[repr(u32)]
 #[allow(clippy::enum_variant_names)]
+#[derive(Debug, DekuRead)]
+#[deku(type = "u32", endian = "big")]
 pub enum TextEncoding {
     MacRoman = 0,
     MacJapanese = 1,
@@ -64,19 +72,27 @@ type Date = u32;
 
 /// Type-dependent file information. Defined in `struct HFSPlusBSDInfo.special`
 /// in TN1150 > HFS Plus Permissions.
-pub union BsdInfoSpecial {
-    inode_number: u32,
-    link_count: u32,
-    raw_device: u32,
+#[derive(Debug, DekuRead)]
+#[deku(endian = "big")]
+pub struct BsdInfoSpecial {
+    /// May represent an inode number, link count, or raw device
+    special: u32,
+    // inode_number: u32,
+    // link_count: u32,
+    // raw_device: u32,
 }
 
 /// File and Folder permissions. Defined as `struct HFSPlusBSDInfo` in
 /// TN1150 > HFS Plus Permissions.
+#[derive(Debug, DekuRead)]
 pub struct BsdInfo {
+    #[deku(endian = "big")]
     owner_id: u32,
+    #[deku(endian = "big")]
     group_id: u32,
     admin_flags: u8,
     owner_flags: u8,
+    #[deku(endian = "big")]
     file_mode: u16,
     special: BsdInfoSpecial,
 }
@@ -317,9 +333,10 @@ pub struct BTreeHeaderRecord {
     #[deku(endian = "big")]
     pub clump_size: u32,
     pub btree_type: BTreeType,
-    pub key_compare_type: u8, //BTreeKeyCompareType,
+    pub key_compare_type: BTreeKeyCompareType,
     #[deku(endian = "big")]
     pub attributes: u32,
+    #[deku(endian = "big")]
     pub reserved_3: [u32; 16],
 }
 
@@ -335,6 +352,8 @@ pub struct BTreeUserDataRecord {
 impl BTreeUserDataRecord {
     pub const SIZE: usize = 128;
 }
+
+pub type BTreeKey = Vec<u8>;
 
 // Can we specify size for Deku parse?
 pub struct BTreeAllocationMapRecord {
@@ -357,8 +376,11 @@ impl BTreeAllocationMapRecord {
 
 /// Information about a catalog file.
 /// Defined as `struct HFSPlusCatalogKey` in TN1150 > Catalog File.
-struct CatalogFileKey {
+#[derive(DekuRead)]
+pub struct CatalogFileKey {
+    #[deku(endian = "big")]
     length: u16,
+    #[deku(endian = "big")]
     parent: CatalogNodeId,
     name: HFSUniStr255,
 }
@@ -413,7 +435,7 @@ pub enum BTreeType {
 #[derive(Debug, DekuRead)]
 #[deku(type = "u8")]
 #[repr(u8)]
-enum BTreeKeyCompareType {
+pub enum BTreeKeyCompareType {
     reserved_hfsx_only = 0x00,
     kHFSCaseFolding = 0xCF,
     kHFSBinaryCompare = 0xBC,
@@ -425,6 +447,7 @@ enum BTreeKeyCompareType {
 
 /// BTree leaf node for Folders. Defined as `struct HFSPlusCatalogFolder`
 /// in TN1150 > Catalog Folder Records
+#[derive(Debug, DekuRead)]
 pub struct CatalogFolder {
     /// Always CatalogFolderDataType::kHFSPlusFolderRecord
     pub record_type: CatalogFileDataType,
@@ -439,8 +462,15 @@ pub struct CatalogFolder {
     pub permissions: BsdInfo,
     pub user_info: FolderInfo,
     pub finder_info: ExtendedFolderInfo,
-    pub text_encoding: TextEncoding,
+    pub text_encoding: u32, // TextEncoding,
     pub reserved: u32,
+}
+
+pub enum CatalogLeafRecord {
+    Folder(CatalogFolder),
+    File(CatalogFile),
+    FolderThread(CatalogThread),
+    FileThread(CatalogThread),
 }
 
 /// Defined in documentation for `struct HFSPlusCatalogFile` in
@@ -463,6 +493,7 @@ enum CatalogFileBitMask {
 
 /// BTree leaf node for Files. Defined as `struct HFSPlusCatalogFile` in
 /// TN1150 > Catalog File Records
+#[derive(Debug, DekuRead)]
 pub struct CatalogFile {
     pub record_type: CatalogFileDataType,
     pub flags: u16,
@@ -471,11 +502,12 @@ pub struct CatalogFile {
     pub create_date: Date,
     pub content_mod_date: Date,
     pub attribute_mod_date: Date,
+    pub access_date: Date,
     pub backup_date: Date,
     pub permissions: BsdInfo,
     pub user_info: FileInfo,
     pub finder_info: ExtendedFileInfo,
-    pub text_encoding: TextEncoding,
+    pub text_encoding: u32, // TextEncoding,
     pub reserved_2: u32,
 
     pub data_fork: ForkData,
@@ -484,15 +516,20 @@ pub struct CatalogFile {
 
 /// BTree link to CNID. Defined as `struct HFSPlusCatalogThread` in
 /// TN1150 > Catalog Thread Records.
-struct CatalogThread {
-    record_type: CatalogFileDataType,
-    reserved: i16,
-    parent_id: CatalogNodeId,
-    node_name: HFSUniStr255,
+#[derive(DekuRead)]
+pub struct CatalogThread {
+    pub record_type: CatalogFileDataType,
+    #[deku(endian = "big")]
+    pub reserved: i16,
+    #[deku(endian = "big")]
+    pub parent_id: CatalogNodeId,
+    pub node_name: HFSUniStr255,
 }
 
 /// A location on screen, used to store window placement.
 /// Defined in TN1150 > Finder Info.
+#[derive(Debug, DekuRead)]
+#[deku(endian = "big")]
 struct Point {
     v: i16,
     h: i16,
@@ -500,6 +537,8 @@ struct Point {
 
 /// Rectangular region used for Directory windows.
 /// Defined in TN1150 > Finder Info.
+#[derive(Debug, DekuRead)]
+#[deku(endian = "big")]
 struct Rect {
     top: i16,
     left: i16,
@@ -513,16 +552,23 @@ type OSType = u32;
 
 /// Presentation info for Finder.
 /// Defined in TN1150 > Finder Info.
+#[derive(Debug, DekuRead)]
 pub struct FileInfo {
+    #[deku(endian = "big")]
     file_type: OSType,
+    #[deku(endian = "big")]
     file_creator: OSType,
+    #[deku(endian = "big")]
     finder_flags: u16,
     location: Point,
+    #[deku(endian = "big")]
     reserved: u16,
 }
 
 /// Additional file information for display in Finder
 /// Defined in TN1150 > Finder Info.
+#[derive(Debug, DekuRead)]
+#[deku(endian = "big")]
 pub struct ExtendedFileInfo {
     reserved_1: [i16; 4],
     extended_finder_flags: u16,
@@ -566,6 +612,7 @@ enum FileInfoFinderFlags {
 
 /// Finder Metadata and display information
 /// Defined in TN1150 > Finder Info.
+#[derive(Debug, DekuRead)]
 pub struct FolderInfo {
     window_bounds: Rect,
     finder_flags: u16,
@@ -575,6 +622,7 @@ pub struct FolderInfo {
 
 /// Finder Metadata and display information
 /// Defined in TN1150 > Finder Info.
+#[derive(Debug, DekuRead)]
 pub struct ExtendedFolderInfo {
     scroll_position: Point,
     reserved_1: i32,
