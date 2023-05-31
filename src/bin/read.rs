@@ -1,6 +1,7 @@
 use deku::DekuContainerRead;
 use hfsprust::*;
 use itertools::{rciter, Itertools};
+use std::alloc::alloc;
 use std::collections::BTreeMap;
 use std::env;
 use std::fs::File;
@@ -66,23 +67,8 @@ fn main() -> Result<(), io::Error> {
 
     let map = read_btree_leaves(&mut cursor, volume_header.block_size as usize)?;
 
-    // Find the first available file node in the map
-    let f = map.values().find(|v| match v {
-        CatalogLeafRecord::File(file_node) => file_node.data_fork.logical_size > u64::pow(1024, 3),
-        _ => false,
-    });
-
-    // Try to build path to file using File/Directory Threads.
-    // See TN1150 > Catalog Tree Usage
-    if let Some(CatalogLeafRecord::File(file_record)) = f {
-        dbg!(file_record);
-
-        let key = cnid_to_key(file_record.file_id);
-        let path = path_for_key(&map, key);
-        dbg!(path);
-    }
-
-    // Search for files that are spilling into Extents Overflow
+    // Search for files that are spilling into Extents Overflow. There's only one in my dataset.
+    println!("-- Overflow files --");
     let overflow = map
         .values()
         .filter(|v| {
@@ -98,9 +84,17 @@ fn main() -> Result<(), io::Error> {
             }
         })
         .collect_vec();
-    println!("-- Overflow files --");
-    dbg!(&overflow);
     println!("Overflow files: {}", overflow.len());
+
+    // Generate list of all files and paths on volume.
+    let all_files = map
+        .values()
+        .filter_map(|record| match record {
+            CatalogLeafRecord::File(file_record) => Some(cnid_to_key(file_record.file_id)),
+            _ => None,
+        })
+        .map(|file_key| path_for_key(&map, file_key));
+    all_files.for_each(|path| println!("{path:?}"));
     Ok(())
 }
 
@@ -113,13 +107,12 @@ fn cnid_to_key(cnid: CatalogNodeId) -> Vec<u8> {
 }
 
 /// Construct a path for a given File Record
-fn path_for_key(map: &BTreeMap<Vec<u8>, CatalogLeafRecord>, start: Vec<u8>) -> Vec<Vec<u8>> {
+fn path_for_key(map: &BTreeMap<Vec<u8>, CatalogLeafRecord>, start: Vec<u8>) -> Vec<String> {
     // Record traversal to root
-    let mut path = Vec::<Vec<u8>>::new();
+    let mut path = Vec::<String>::new();
 
-    // Construct initial key
+    // Construct key for initial lookup
     let mut key = start;
-
     loop {
         if let Some(thread) = map.get(&key) {
             key = match thread {
@@ -130,17 +123,18 @@ fn path_for_key(map: &BTreeMap<Vec<u8>, CatalogLeafRecord>, start: Vec<u8>) -> V
                     unreachable!("Unexpected file record in thread!");
                 }
                 CatalogLeafRecord::FolderThread(t) => {
-                    path.push(key);
-                    println!("Dir {}", String::from_utf16_lossy(&t.node_name.string));
+                    let dir_name = String::from_utf16_lossy(&t.node_name.string);
+                    path.push(dir_name);
                     cnid_to_key(t.parent_id)
                 }
                 CatalogLeafRecord::FileThread(t) => {
-                    println!("File {}", String::from_utf16_lossy(&t.node_name.string));
-                    path.push(key);
+                    let file_name = String::from_utf16_lossy(&t.node_name.string);
+                    path.push(file_name);
                     cnid_to_key(t.parent_id)
                 }
             };
         } else {
+            path.reverse();
             return path;
         };
     }
@@ -272,18 +266,19 @@ fn read_btree_leaves(
 
         for record in records {
             let (key, leaf_record) = parse_catalog_leaf(&record)?;
-            if let CatalogLeafRecord::File(file) = &leaf_record {
-                let active_extents = file
-                    .data_fork
-                    .extents
-                    .iter()
-                    .filter(|extent| extent.block_count > 0)
-                    .count();
-                // println!(
-                //     "\t\t{} bytes in {} blocks across {} extents",
-                //     file.data_fork.logical_size, file.data_fork.total_blocks, active_extents
-                // );
-            };
+            // Enumerate file extents and usage.
+            // if let CatalogLeafRecord::File(file) = &leaf_record {
+            //     let active_extents = file
+            //         .data_fork
+            //         .extents
+            //         .iter()
+            //         .filter(|extent| extent.block_count > 0)
+            //         .count();
+            //     println!(
+            //         "\t\t{} bytes in {} blocks across {} extents",
+            //         file.data_fork.logical_size, file.data_fork.total_blocks, active_extents
+            //     );
+            // };
 
             btree.insert(key, leaf_record);
         }
