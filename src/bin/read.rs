@@ -1,6 +1,7 @@
 use deku::DekuContainerRead;
 use hfsprust::*;
 use itertools::{rciter, Itertools};
+use sha2::{Digest, Sha256};
 use std::alloc::alloc;
 use std::collections::BTreeMap;
 use std::env;
@@ -411,13 +412,15 @@ fn copy_file_data_from_extents(
     file_record: &CatalogFile,
     overflow_extents: Vec<ExtentDescriptor>, // FIXME Handle overflow extents. Just chain iterators? Better to supply a list of extents
     output: &mut impl Write,
-) -> Result<(), io::Error> {
+) -> Result<(u64, String), io::Error> {
     let logical_size = file_record.data_fork.logical_size;
     let mut bytes_read = 0u64;
 
+    let mut hasher = Sha256::new();
     // Avoid work and corner cases for empty files.
     if logical_size == 0 {
-        return Ok(());
+        let hash = format!("{:x}", hasher.finalize());
+        return Ok((logical_size, hash));
     }
 
     // Memmap would be more efficient here. Vectored IO would be the next most efficient.
@@ -442,11 +445,13 @@ fn copy_file_data_from_extents(
                     buf.truncate(residual as usize);
                 }
 
+                hasher.update(&buf);
                 output.write_all(&buf)?;
             }
 
             Ok::<(), io::Error>(())
         })?;
 
-    Ok(())
+    let hash = format!("{:x}", hasher.finalize());
+    Ok((logical_size, hash))
 }
