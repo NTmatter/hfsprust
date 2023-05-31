@@ -4,30 +4,35 @@ use itertools::{rciter, Itertools};
 use sha2::{Digest, Sha256};
 use std::alloc::alloc;
 use std::collections::BTreeMap;
-use std::env;
 use std::fs::File;
 use std::io::{self, BufRead, Cursor, Read, Seek, SeekFrom, Write};
 use std::os::unix::prelude::FileExt;
+use std::path::PathBuf;
+use std::{env, fs};
 
 fn main() -> Result<(), io::Error> {
     let args: Vec<String> = env::args().collect();
-    if args.len() != 2 {
-        eprintln!("usage: read /path/to/file.img");
+    if args.len() != 3 {
+        eprintln!("usage: read /path/to/file.img /path/to/output/");
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             "Missing file argument",
         ));
     }
 
-    let test_path = args.get(1).unwrap();
-    println!("Operating on {test_path}");
+    let volume_file_path = args.get(1).expect("Path to Image File as first argument");
+    println!("Operating on {volume_file_path}");
+    let output_root_path = args
+        .get(2)
+        .expect("Path to output directory as second argument");
+    println!("Writing to {output_root_path}");
 
-    let mut test_file = File::options().read(true).open(test_path)?;
+    let mut volume_file = File::options().read(true).open(volume_file_path)?;
 
     // Leading zeroes at start of file
     const PREAMBLE_LENGTH: usize = 1024;
     let mut buf = [0u8; PREAMBLE_LENGTH];
-    test_file
+    volume_file
         .read_exact_at(&mut buf, 0)
         .expect("1kB of zeroes present at start of volume");
 
@@ -38,7 +43,7 @@ fn main() -> Result<(), io::Error> {
     // Read volume header structure.
     const VOLUME_HEADER_LENGTH: usize = 512;
     let mut buf = [0u8; VOLUME_HEADER_LENGTH];
-    test_file
+    volume_file
         .read_exact_at(&mut buf, 1024)
         .expect("Read volume header");
 
@@ -57,12 +62,12 @@ fn main() -> Result<(), io::Error> {
     println!();
 
     let catalog_extents = assemble_extents(
-        &mut test_file,
+        &mut volume_file,
         &volume_header.catalog_file,
         volume_header.block_size as usize,
     )?;
     println!("Assembled Catalog Extents.");
-    println!("\tTotal Size: {}", &catalog_extents.len());
+    println!("\tTotal Catalog Size: {}", &catalog_extents.len());
 
     let mut cursor = Cursor::new(catalog_extents);
 
@@ -77,7 +82,10 @@ fn main() -> Result<(), io::Error> {
             _ => None,
         })
         .map(|file_key| path_for_key(&map, file_key))
-        .filter(|path| !path.contains(&String::from("\0\0\0\0HFS+ Private Data")));
+        .filter(|path| {
+            !path.contains(&String::from("\0\0\0\0HFS+ Private Data"))
+                && !path.contains(&String::from(".Spotlight-V100"))
+        });
     all_files.for_each(|path| println!("{path:?}"));
 
     // Search for files that are spilling into Extents Overflow.
@@ -103,6 +111,62 @@ fn main() -> Result<(), io::Error> {
             println!("{:?}", path_for_key(&map, cnid_to_key(file_record.file_id)));
         }
     });
+
+    // Extract all remaining non-overflow files.
+    // Ensure output directory exists
+    println!("-- Processing Files --");
+    let output_root = PathBuf::from(output_root_path);
+    if !output_root.exists() {
+        fs::create_dir(&output_root)?;
+    }
+    assert!(output_root.is_dir()); // TODO return proper error if not writing to a directory
+    map.values()
+        .filter(|record| matches!(record, CatalogLeafRecord::File(_)))
+        .try_for_each(|record| {
+            if let CatalogLeafRecord::File(file_record) = record {
+                let file_key = cnid_to_key(file_record.file_id);
+                let original_file_path = path_for_key(&map, file_key);
+
+                // Skip HFS Private Data and various Metadata
+                if original_file_path.contains(&String::from("\0\0\0\0HFS+ Private Data"))
+                    || original_file_path.contains(&String::from(".Spotlight-V100"))
+                    || original_file_path.contains(&String::from(".journal"))
+                    || original_file_path.contains(&String::from(".DS_Store"))
+                    || original_file_path.contains(&String::from(".journal_info_block"))
+                    || original_file_path.contains(&String::from(".fseventsd"))
+                {
+                    println!("Skipping {original_file_path:?}");
+                    return Ok(());
+                }
+                println!(
+                    "Processing {original_file_path:?} size={}",
+                    file_record.data_fork.logical_size
+                );
+                // Create parent directories for output file if they do not exist
+                let mut output_path = output_root.clone();
+                original_file_path
+                    .iter()
+                    .for_each(|component| output_path.push(component));
+                let parent_dir_path = output_path.parent().unwrap();
+                if !parent_dir_path.exists() {
+                    fs::create_dir_all(parent_dir_path)?;
+                }
+
+                let mut output_file = File::options()
+                    .write(true)
+                    .create_new(true)
+                    .open(output_path)?;
+
+                copy_file_data_from_extents(
+                    &mut volume_file,
+                    block_size as u16,
+                    file_record,
+                    Vec::new(),
+                    &mut output_file,
+                )?;
+            }
+            Ok::<(), io::Error>(())
+        })?;
 
     Ok(())
 }
@@ -371,7 +435,7 @@ fn parse_catalog_leaf(record: &Vec<u8>) -> Result<(Vec<u8>, CatalogLeafRecord), 
 
 /// Concatenate all of a fork's extents into a single buffer. Does not handle Overflow extents yet.
 fn assemble_extents(
-    stream: &mut (impl Read + Seek),
+    volume: &mut (impl Read + Seek),
     fork_data: &ForkData,
     block_size: usize,
 ) -> Result<Vec<u8>, io::Error> {
@@ -396,8 +460,8 @@ fn assemble_extents(
         let buf = &mut data[slice_start..slice_end];
 
         let offset = extent.start_block as u64 * block_size as u64;
-        stream.seek(SeekFrom::Start(offset))?;
-        stream.read_exact(buf)?;
+        volume.seek(SeekFrom::Start(offset))?;
+        volume.read_exact(buf)?;
 
         // Track bytes read.
         bytes_read += slice_length;
