@@ -67,8 +67,20 @@ fn main() -> Result<(), io::Error> {
 
     let map = read_btree_leaves(&mut cursor, volume_header.block_size as usize)?;
 
-    // Search for files that are spilling into Extents Overflow. There's only one in my dataset.
-    println!("-- Overflow files --");
+    // Generate list of all files and paths on volume, excluding HFS+ Private Data.
+    println!("-- All Files --");
+    let all_files = map
+        .values()
+        .filter_map(|record| match record {
+            CatalogLeafRecord::File(file_record) => Some(cnid_to_key(file_record.file_id)),
+            _ => None,
+        })
+        .map(|file_key| path_for_key(&map, file_key))
+        .filter(|path| !path.contains(&String::from("\0\0\0\0HFS+ Private Data")));
+    all_files.for_each(|path| println!("{path:?}"));
+
+    // Search for files that are spilling into Extents Overflow.
+    println!("-- Overflow Files --");
     let overflow = map
         .values()
         .filter(|v| {
@@ -84,17 +96,13 @@ fn main() -> Result<(), io::Error> {
             }
         })
         .collect_vec();
-    println!("Overflow files: {}", overflow.len());
+    println!("Overflow Files: {}", overflow.len());
+    overflow.iter().for_each(|record| {
+        if let CatalogLeafRecord::File(file_record) = record {
+            println!("{:?}", path_for_key(&map, cnid_to_key(file_record.file_id)));
+        }
+    });
 
-    // Generate list of all files and paths on volume.
-    let all_files = map
-        .values()
-        .filter_map(|record| match record {
-            CatalogLeafRecord::File(file_record) => Some(cnid_to_key(file_record.file_id)),
-            _ => None,
-        })
-        .map(|file_key| path_for_key(&map, file_key));
-    all_files.for_each(|path| println!("{path:?}"));
     Ok(())
 }
 
