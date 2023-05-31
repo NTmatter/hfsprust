@@ -5,7 +5,7 @@ use std::alloc::alloc;
 use std::collections::BTreeMap;
 use std::env;
 use std::fs::File;
-use std::io::{self, BufRead, Cursor, Read, Seek, SeekFrom};
+use std::io::{self, BufRead, Cursor, Read, Seek, SeekFrom, Write};
 use std::os::unix::prelude::FileExt;
 
 fn main() -> Result<(), io::Error> {
@@ -403,4 +403,50 @@ fn assemble_extents(
     }
 
     Ok(data)
+}
+
+fn copy_file_data_from_extents(
+    volume: &mut (impl Read + Seek),
+    block_size: u16,
+    file_record: &CatalogFile,
+    overflow_extents: Vec<ExtentDescriptor>, // FIXME Handle overflow extents. Just chain iterators? Better to supply a list of extents
+    output: &mut impl Write,
+) -> Result<(), io::Error> {
+    let logical_size = file_record.data_fork.logical_size;
+    let mut bytes_read = 0u64;
+
+    // Avoid work and corner cases for empty files.
+    if logical_size == 0 {
+        return Ok(());
+    }
+
+    // Memmap would be more efficient here. Vectored IO would be the next most efficient.
+    // Let's go with boring and correct for now, and build accelerated paths later.
+    file_record
+        .data_fork
+        .extents
+        .iter()
+        .chain(overflow_extents.iter())
+        .try_for_each(|extent| {
+            let source_start_byte = extent.start_block as u64 * block_size as u64;
+
+            volume.seek(SeekFrom::Start(source_start_byte))?;
+            for _ in extent.start_block..(extent.start_block + extent.block_count) {
+                let mut buf = vec![0u8; block_size as usize];
+                volume.read_exact(&mut buf)?;
+                bytes_read += block_size as u64;
+
+                // Trim any bytes that we don't need.
+                if bytes_read > logical_size {
+                    let residual = bytes_read - logical_size;
+                    buf.truncate(residual as usize);
+                }
+
+                output.write_all(&buf)?;
+            }
+
+            Ok::<(), io::Error>(())
+        })?;
+
+    Ok(())
 }
