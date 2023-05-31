@@ -17,6 +17,12 @@ pub struct HFSUniStr255 {
     pub string: Vec<u16>,
 }
 
+impl Into<String> for HFSUniStr255 {
+    fn into(self) -> String {
+        String::from_utf16_lossy(self.string.as_slice())
+    }
+}
+
 /// Encoding for conversion to MacOS-encoded Pascal String.
 /// Defined in TN1150 > Text Encodings.
 #[repr(u32)]
@@ -257,7 +263,7 @@ pub struct VolumeHeader {
 
 /// Catalog Node ID or CNID identifies a B-tree file.
 /// Defined in TN1150 > Catalog File.
-type CatalogNodeId = u32;
+pub type CatalogNodeId = u32;
 
 #[allow(non_camel_case_types, clippy::enum_variant_names)]
 #[repr(u32)]
@@ -534,6 +540,7 @@ pub struct CatalogFolder {
     pub reserved: u32,
 }
 
+#[derive(Debug)]
 pub enum CatalogLeafRecord {
     Folder(CatalogFolder),
     File(CatalogFile),
@@ -564,18 +571,28 @@ enum CatalogFileBitMask {
 #[derive(Debug, DekuRead)]
 pub struct CatalogFile {
     pub record_type: CatalogFileDataType,
+    #[deku(endian = "big")]
     pub flags: u16,
+    #[deku(endian = "big")]
     pub reserved_1: u32,
+    #[deku(endian = "big")]
     pub file_id: CatalogNodeId,
+    #[deku(endian = "big")]
     pub create_date: Date,
+    #[deku(endian = "big")]
     pub content_mod_date: Date,
+    #[deku(endian = "big")]
     pub attribute_mod_date: Date,
+    #[deku(endian = "big")]
     pub access_date: Date,
+    #[deku(endian = "big")]
     pub backup_date: Date,
     pub permissions: BsdInfo,
     pub user_info: FileInfo,
     pub finder_info: ExtendedFileInfo,
+    #[deku(endian = "big")]
     pub text_encoding: u32, // TextEncoding,
+    #[deku(endian = "big")]
     pub reserved_2: u32,
 
     pub data_fork: ForkData,
@@ -584,7 +601,7 @@ pub struct CatalogFile {
 
 /// BTree link to CNID. Defined as `struct HFSPlusCatalogThread` in
 /// TN1150 > Catalog Thread Records.
-#[derive(DekuRead)]
+#[derive(Debug, DekuRead)]
 pub struct CatalogThread {
     pub record_type: CatalogFileDataType,
     #[deku(endian = "big")]

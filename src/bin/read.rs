@@ -68,30 +68,63 @@ fn main() -> Result<(), io::Error> {
 
     // Find the first available file node in the map
     let f = map.values().find(|v| match v {
-        CatalogLeafRecord::File(_) => true,
+        CatalogLeafRecord::File(file_node) => file_node.data_fork.logical_size > u64::pow(1024, 3),
         _ => false,
     });
+
+    // Try to build path to file using File/Directory Threads.
+    // See TN1150 > Catalog Tree Usage
     if let Some(CatalogLeafRecord::File(file_record)) = f {
         dbg!(file_record);
-        // Look up cnid with empty name to find file thread
-        let key_length = 6u16; // Size of cnid + empty name
-        let cnid = file_record.file_id;
-        let mut key = Vec::<u8>::with_capacity(2 + key_length as usize);
-        key.extend_from_slice(key_length.to_be_bytes().as_slice());
-        key.extend_from_slice(cnid.to_be_bytes().as_slice());
-        key.extend(&[0u8; 2]);
-        dbg!(&key);
 
-        let found = map.contains_key(&key);
-        dbg!(found);
+        let key = cnid_to_key(file_record.file_id);
+        let path = path_for_key(&map, key);
+        dbg!(path);
     }
 
     Ok(())
 }
 
-/// Construct a derectory path for a given key
-fn path_for_key(map: &BTreeMap<Vec<u8>, CatalogLeafRecord>, key: &Vec<u8>) {
-    let path = Vec::<Vec<u8>>::new();
+fn cnid_to_key(cnid: CatalogNodeId) -> Vec<u8> {
+    let mut key = Vec::<u8>::with_capacity(6);
+    key.extend_from_slice(cnid.to_be_bytes().as_slice());
+    key.extend(&[0u8; 2]);
+
+    key
+}
+
+/// Construct a path for a given File Record
+fn path_for_key(map: &BTreeMap<Vec<u8>, CatalogLeafRecord>, start: Vec<u8>) -> Vec<Vec<u8>> {
+    // Record traversal to root
+    let mut path = Vec::<Vec<u8>>::new();
+
+    // Construct initial key
+    let mut key = start;
+
+    loop {
+        if let Some(thread) = map.get(&key) {
+            key = match thread {
+                CatalogLeafRecord::Folder(_) => {
+                    unreachable!("Unexpected folder record in thread!");
+                }
+                CatalogLeafRecord::File(_) => {
+                    unreachable!("Unexpected file record in thread!");
+                }
+                CatalogLeafRecord::FolderThread(t) => {
+                    path.push(key);
+                    println!("Dir {}", String::from_utf16_lossy(&t.node_name.string));
+                    cnid_to_key(t.parent_id)
+                }
+                CatalogLeafRecord::FileThread(t) => {
+                    println!("File {}", String::from_utf16_lossy(&t.node_name.string));
+                    path.push(key);
+                    cnid_to_key(t.parent_id)
+                }
+            };
+        } else {
+            return path;
+        };
+    }
 }
 
 fn read_btree_node(
@@ -241,7 +274,50 @@ fn read_btree_leaves(
 }
 
 fn parse_catalog_leaf(record: &Vec<u8>) -> Result<(Vec<u8>, CatalogLeafRecord), io::Error> {
-    let ((rest, _remaining), key) = CatalogFileKey::from_bytes((record, 0))?;
+    let mut cur = Cursor::new(record);
+
+    // Are we actually trying to read a Catalog File Key here?
+
+    // Key Length: u16, as per TN1150 > Keyed Records. Might vary for non-leaves.
+    let mut buf = [0u8; 2];
+    cur.read_exact(&mut buf)?;
+    let key_length = u16::from_be_bytes(buf);
+
+    // Key Data (opaque)
+    let mut key: BTreeKey = vec![0u8; key_length as usize];
+    cur.read_exact(&mut key)?;
+    //
+    // let mut key_cur = Cursor::new(&key);
+    //
+    // // Key: Parent CNID
+    // let mut buf = [0u8; 4];
+    // key_cur.read_exact(&mut buf)?;
+    // let parent_cnid = u32::from_be_bytes(buf);
+    //
+    // // Key: String Length
+    // let mut buf = [0u8; 2];
+    // key_cur.read_exact(&mut buf)?;
+    // let char_count = u16::from_be_bytes(buf) as usize;
+    //
+    // // Key: File Name
+    // let mut name = Vec::<u16>::new();
+    // for _ in 0..char_count {
+    //     let mut buf = [0u8; 2];
+    //     key_cur.read_exact(&mut buf)?;
+    //     let char = u16::from_be_bytes(buf);
+    //     name.push(char);
+    // }
+    // let name = String::from_utf16_lossy(&name);
+
+    // Alignment
+    if key_length % 2 == 1 {
+        eprintln!("Found odd key length! Consume padding.");
+        // Consider: cur.consume(1);
+        cur.read_exact(&mut [0u8; 1])?;
+    }
+
+    let mut rest = Vec::<u8>::new();
+    cur.read_to_end(&mut rest)?;
 
     // Peek at record kind
     let mut buf = vec![rest[0], rest[1]];
@@ -267,7 +343,7 @@ fn parse_catalog_leaf(record: &Vec<u8>) -> Result<(Vec<u8>, CatalogLeafRecord), 
         }
     };
 
-    Ok((key.into(), record))
+    Ok((key, record))
 }
 
 /// Concatenate all of a fork's extents into a single buffer. Does not handle Overflow extents yet.
