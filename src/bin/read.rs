@@ -82,6 +82,25 @@ fn main() -> Result<(), io::Error> {
         dbg!(path);
     }
 
+    // Search for files that are spilling into Extents Overflow
+    let overflow = map
+        .values()
+        .filter(|v| {
+            if let CatalogLeafRecord::File(f) = v {
+                f.data_fork.total_blocks
+                    > f.data_fork
+                        .extents
+                        .iter()
+                        .map(|extent| extent.block_count)
+                        .sum()
+            } else {
+                false
+            }
+        })
+        .collect_vec();
+    println!("-- Overflow files --");
+    dbg!(&overflow);
+    println!("Overflow files: {}", overflow.len());
     Ok(())
 }
 
