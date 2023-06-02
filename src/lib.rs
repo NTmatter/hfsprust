@@ -1,11 +1,11 @@
 #![forbid(unsafe_code)]
 #![allow(dead_code)]
 
-use deku::bitvec::{BitSlice, Msb0};
+pub mod raw;
+
 use deku::prelude::*;
-use std::fmt::Formatter;
+use std::io;
 use std::io::{Cursor, Read};
-use std::{fmt, io};
 
 /// Unicode 2.0 String. Defined in TN1150 > HFS Plus Names.
 /// Strings are stored fully-decomposed in canonical order.
@@ -267,7 +267,7 @@ pub type CatalogNodeId = u32;
 
 #[allow(non_camel_case_types, clippy::enum_variant_names)]
 #[repr(u32)]
-enum StandardCnid {
+pub enum StandardCnid {
     kHFSRootParentID = 1,
     kHFSRootFolderID = 2,
     kHFSExtentsFileID = 3,
