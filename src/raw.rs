@@ -232,3 +232,299 @@ pub enum BTNodeDescriptor_kind {
     kHFSPlusFolderThreadRecord = 0x0003,
     kHFSPlusFileThreadRecord = 0x0004,
 }
+
+#[repr(C, packed)]
+pub struct HFSPlusCatalogFolder {
+    pub recordType: i16,
+    pub flags: u16,
+    pub valence: u32,
+    pub folderID: HFSCatalogNodeID,
+    pub createDate: u32,
+    pub contentModDate: u32,
+    pub attributeModDate: u32,
+    pub accessDate: u32,
+    pub backupDate: u32,
+    pub permissions: HFSPlusBSDInfo,
+    pub userInfo: FolderInfo,
+    pub finderInfo: ExtendedFolderInfo,
+    pub textEncoding: u32,
+    pub reserved: u32,
+}
+
+#[repr(C, packed)]
+pub struct HFSPlusCatalogFile {
+    pub recordType: i16,
+    pub flags: u16,
+    pub reserved1: u32,
+    pub fileID: HFSCatalogNodeID,
+    pub createDate: u32,
+    pub contentModDate: u32,
+    pub attributeModDate: u32,
+    pub accessDate: u32,
+    pub backupDate: u32,
+    pub permissions: HFSPlusBSDInfo,
+    pub userInfo: FileInfo,
+    pub finderInfo: ExtendedFileInfo,
+    pub textEncoding: u32,
+    pub reserved2: u32,
+    pub dataFork: HFSPlusForkData,
+    pub resourceFork: HFSPlusForkData,
+}
+
+#[repr(u16)]
+pub enum HFSPlusCatalog_fields {
+    kHFSFileLockedBit = 0x0000,
+    kHFSThreadExistsBit = 0x0001,
+}
+
+#[repr(u16)]
+pub enum HFSPlusCatalog_masks {
+    kHFSFileLockedMask = 0x0001,
+
+    kHFSThreadExistsMask = 0x0002,
+}
+
+#[repr(C, packed)]
+pub struct HFSPlusCatalogThread<'a> {
+    pub recordType: i16,
+    pub reserved: i16,
+    pub parentID: HFSCatalogNodeID,
+    pub nodeName: HFSUniStr255<'a>,
+}
+
+#[repr(C, packed)]
+pub struct Point {
+    pub v: i16,
+    pub h: i16,
+}
+
+#[repr(C, packed)]
+pub struct Rect {
+    pub top: i16,
+    pub left: i16,
+    pub bottom: i16,
+    pub right: i16,
+}
+
+/* OSType is a 32-bit value made by packing four 1-byte characters
+together. */
+pub type FourCharCode = u32;
+pub type OSType = FourCharCode;
+
+/* Finder flags (finderFlags, fdFlags and frFlags) */
+#[repr(u16)]
+pub enum FinderFlags {
+    kIsOnDesk = 0x0001, /* Files and folders (System 6) */
+    kColor = 0x000E,    /* Files and folders */
+    kIsShared = 0x0040, /* Files only (Applications only) If */
+    /* clear, the application needs */
+    /* to write to its resource fork, */
+    /* and therefore cannot be shared */
+    /* on a server */
+    kHasNoINITs = 0x0080, /* Files only (Extensions/Control */
+    /* Panels only) */
+    /* This file contains no INIT resource */
+    kHasBeenInited = 0x0100, /* Files only.  Clear if the file */
+    /* contains desktop database resources */
+    /* ('BNDL', 'FREF', 'open', 'kind'...) */
+    /* that have not been added yet.  Set */
+    /* only by the Finder. */
+    /* Reserved for folders */
+    kHasCustomIcon = 0x0400, /* Files and folders */
+    kIsStationery = 0x0800,  /* Files only */
+    kNameLocked = 0x1000,    /* Files and folders */
+    kHasBundle = 0x2000,     /* Files only */
+    kIsInvisible = 0x4000,   /* Files and folders */
+    kIsAlias = 0x8000,       /* Files only */
+}
+
+/* Extended flags (extendedFinderFlags, fdXFlags and frXFlags) */
+#[repr(u16)]
+pub enum ExtendedFinderFlags {
+    kExtendedFlagsAreInvalid = 0x8000, /* The other extended flags */
+    /* should be ignored */
+    kExtendedFlagHasCustomBadge = 0x0100, /* The file or folder has a */
+    /* badge resource */
+    kExtendedFlagHasRoutingInfo = 0x0004, /* The file contains routing */
+                                          /* info resource */
+}
+
+#[repr(C, packed)]
+pub struct FileInfo {
+    pub fileType: OSType,    /* The type of the file */
+    pub fileCreator: OSType, /* The file's creator */
+    pub finderFlags: u16,
+    pub location: Point, /* File's location in the folder. */
+    pub reservedField: u16,
+}
+
+#[repr(C, packed)]
+pub struct ExtendedFileInfo {
+    pub reserved1: [i16; 4],
+    pub extendedFinderFlags: u16,
+    pub reserved2: i16,
+    pub putAwayFolderID: i16,
+}
+
+#[repr(C, packed)]
+pub struct FolderInfo {
+    pub windowBounds: Rect, /* The position and dimension of the */
+    /* folder's window */
+    pub finderFlags: u16,
+    pub location: Point, /* Folder's location in the parent */
+    /* folder. If set to {0, 0}, the Finder */
+    /* will place the item automatically */
+    pub reservedField: u16,
+}
+
+#[repr(C, packed)]
+pub struct ExtendedFolderInfo {
+    pub scrollPosition: Point, /* Scroll position (for icon views) */
+    pub reserved1: i32,
+    pub extendedFinderFlags: u16,
+    pub reserved2: i16,
+    pub putAwayFolderID: i32,
+}
+
+#[repr(C, packed)]
+pub struct HFSPlusExtentKey {
+    pub keyLength: u16,
+    pub forkType: u8,
+    pub pad: u8,
+    pub fileID: HFSCatalogNodeID,
+    pub startBlock: u32,
+}
+
+fn IsAllocationBlockUsed(thisAllocationBlock: u32, allocationFileContents: &[u8]) -> bool {
+    let thisByte: u8;
+
+    thisByte = allocationFileContents[(thisAllocationBlock / 8) as usize];
+    return (thisByte & (1 << (7 - (thisAllocationBlock % 8)))) != 0;
+}
+
+#[repr(u32)]
+pub enum HFSPlusAttrForkData_recordType {
+    kHFSPlusAttrInlineData = 0x10,
+    kHFSPlusAttrForkData = 0x20,
+    kHFSPlusAttrExtents = 0x30,
+}
+
+#[repr(C, packed)]
+pub struct HFSPlusAttrForkData {
+    pub recordType: u32,
+    pub reserved: u32,
+    pub theFork: HFSPlusForkData,
+}
+
+#[repr(C, packed)]
+pub struct HFSPlusAttrExtents {
+    pub recordType: u32,
+    pub reserved: u32,
+    pub extents: HFSPlusExtentRecord,
+}
+
+pub const kHardLinkFileType: &[u8] = b"hlnk"; // 0x686C6E6B
+pub const kHFSPlusCreator: &[u8] = b"hfs+"; // 0x6866732B
+pub const kSymLinkFileType: &[u8] = b"slnk"; // 0x736C6E6B
+pub const kSymLinkCreator: &[u8] = b"rhap"; // 0x72686170
+
+#[repr(C, packed)]
+pub struct JournalInfoBlock {
+    pub flags: u32,
+    pub device_signature: [u32; 8],
+    pub offset: u64,
+    pub size: u64,
+    pub reserved: [u32; 32],
+}
+
+#[repr(u32)]
+pub enum JournalInfoBlock_flags {
+    kJIJournalInFSMask = 0x00000001,
+    kJIJournalOnOtherDeviceMask = 0x00000002,
+    kJIJournalNeedInitMask = 0x00000004,
+}
+#[repr(C, packed)]
+pub struct journal_header {
+    pub magic: u32,
+    pub endian: u32,
+    pub start: u64,
+    pub end: u64,
+    pub size: u64,
+    pub blhdr_size: u32,
+    pub checksum: u32,
+    pub jhdr_size: u32,
+}
+
+pub const JOURNAL_HEADER_MAGIC: u32 = 0x4a4e4c78;
+pub const ENDIAN_MAGIC: u32 = 0x12345678;
+
+#[repr(C, packed)]
+pub struct block_list_header<'a> {
+    pub max_blocks: u16,
+    pub num_blocks: u16,
+    pub bytes_used: u32,
+    pub checksum: u32,
+    pub pad: u32,
+    pub binfo: &'a [block_info],
+}
+
+#[repr(C, packed)]
+pub struct block_info {
+    pub bnum: u64,
+    pub bsize: u32,
+    pub next: u32,
+}
+
+// Modified to operate on a slice, rather than pointer with offset.
+fn calc_checksum(ptr: &[u8]) -> i32 {
+    let mut cksum = 0i32;
+    for b in ptr {
+        cksum = (cksum << 8) ^ (cksum.overflowing_add(*b as i32).0);
+    }
+
+    return !cksum;
+}
+
+pub const HFC_MAGIC: u32 = 0xFF28FF26;
+pub const HFC_VERSION: u32 = 1;
+pub const HFC_DEFAULT_DURATION: u32 = (3600 * 60);
+pub const HFC_MINIMUM_TEMPERATURE: u32 = 16;
+pub const HFC_MAXIMUM_FILESIZE: u32 = (10 * 1024 * 1024);
+pub const hfc_tag: &[u8] = b"CLUSTERED HOT FILES B-TREE     ";
+
+#[repr(C, packed)]
+struct HotFilesInfo<'a> {
+    magic: u32,
+    version: u32,
+    duration: u32, /* duration of sample period */
+    timebase: u32, /* recording period start time */
+    timeleft: u32, /* recording period stop time */
+    threshold: u32,
+    maxfileblks: u32,
+    maxfilecnt: u32,
+    tag: &'a [u8; 32],
+}
+
+#[repr(C, packed)]
+pub struct HotFileKey {
+    pub keyLength: u16,
+    pub forkType: u8,
+    pub pad: u8,
+    pub temperature: u32,
+    pub fileID: u32,
+}
+
+const HFC_LOOKUPTAG: u32 = 0xFFFFFFFF;
+const HFC_KEYLENGTH: usize = std::mem::size_of::<HotFileKey>() - std::mem::size_of::<u32>();
+
+// TODO Case-insensitive string comparison. How does this compare to Rust's comparisons?
+// I don't want to include the entire Unicode table, however it might be necessary to
+// reuse it to ensure compatibility.
+
+// TODO Add new parameters
+// fn HFSPlusSectorToDiskSector(hfsPlusSector: u32) -> u32 {
+//     let mut embeddedDiskOffset: u32;
+
+//     embeddedDiskOffset = gMDB.drAlBlSt + gMDB.drEmbedExtent.startBlock * (drAlBlkSiz / 512);
+//     return embeddedDiskOffset + hfsPlusSector;
+// }
