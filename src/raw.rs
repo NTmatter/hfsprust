@@ -2,6 +2,10 @@
 //! invalid data. Mostly copied and adapted from
 //! [TN1150](https://developer.apple.com/library/archive/technotes/tn/tn1150.html),
 //! retaining the original naming and layout.
+//!
+
+// Silence warnings caused by copying names from TN1150
+#![allow(non_camel_case_types, non_snake_case, non_upper_case_globals)]
 
 #[repr(C, packed)]
 pub struct HFSUniStr255<'a> {
@@ -443,6 +447,7 @@ pub enum JournalInfoBlock_flags {
     kJIJournalOnOtherDeviceMask = 0x00000002,
     kJIJournalNeedInitMask = 0x00000004,
 }
+
 #[repr(C, packed)]
 pub struct journal_header {
     pub magic: u32,
@@ -487,9 +492,9 @@ fn calc_checksum(ptr: &[u8]) -> i32 {
 
 pub const HFC_MAGIC: u32 = 0xFF28FF26;
 pub const HFC_VERSION: u32 = 1;
-pub const HFC_DEFAULT_DURATION: u32 = (3600 * 60);
+pub const HFC_DEFAULT_DURATION: u32 = 3600 * 60;
 pub const HFC_MINIMUM_TEMPERATURE: u32 = 16;
-pub const HFC_MAXIMUM_FILESIZE: u32 = (10 * 1024 * 1024);
+pub const HFC_MAXIMUM_FILESIZE: u32 = 10 * 1024 * 1024;
 pub const hfc_tag: &[u8] = b"CLUSTERED HOT FILES B-TREE     ";
 
 #[repr(C, packed)]
