@@ -8,9 +8,13 @@
 #![allow(non_camel_case_types, non_snake_case, non_upper_case_globals)]
 
 #[repr(C, packed)]
-pub struct HFSUniStr255<'a> {
+pub struct HFSUniStr255 {
     pub length: u16,
-    pub unicode: &'a [u16], // This would be better off as a Vec<u16>.
+    pub unicode: [u16; Self::MAX_LENGTH],
+}
+
+impl HFSUniStr255 {
+    pub const MAX_LENGTH: usize = 255;
 }
 
 /// An enum of encoding types to aid conversion.
@@ -220,10 +224,10 @@ pub enum WellKnownCnid {
 }
 
 #[repr(C, packed)]
-pub struct HFSPlusCatalogKey<'a> {
+pub struct HFSPlusCatalogKey {
     keyLength: u32,
     parentID: HFSCatalogNodeID,
-    nodeName: HFSUniStr255<'a>,
+    nodeName: HFSUniStr255,
 }
 
 pub const kHFSPlusCatalogKeyMinimumLength: u32 = 6;
@@ -289,11 +293,11 @@ pub enum HFSPlusCatalog_masks {
 }
 
 #[repr(C, packed)]
-pub struct HFSPlusCatalogThread<'a> {
+pub struct HFSPlusCatalogThread {
     pub recordType: i16,
     pub reserved: i16,
     pub parentID: HFSCatalogNodeID,
-    pub nodeName: HFSUniStr255<'a>,
+    pub nodeName: HFSUniStr255,
 }
 
 #[repr(C, packed)]
