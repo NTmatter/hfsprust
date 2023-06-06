@@ -366,9 +366,12 @@ pub enum HFSPlusCatalog_masks {
     kHFSThreadExistsMask = 0x0002,
 }
 
+#[cfg_attr(feature = "deku", derive(DekuRead))]
 #[repr(C, packed)]
 pub struct HFSPlusCatalogThread {
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub recordType: i16,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub reserved: i16,
     pub parentID: HFSCatalogNodeID,
     pub nodeName: HFSUniStr255,
