@@ -7,10 +7,15 @@
 // Silence warnings caused by copying names from TN1150
 #![allow(non_camel_case_types, non_snake_case, non_upper_case_globals)]
 
+use deku::prelude::*;
+
+#[cfg_attr(feature = "deku", derive(DekuRead))]
+#[cfg_attr(feature = "deku", deku(endian = "big"))]
 #[repr(C, packed)]
 pub struct HFSUniStr255 {
     pub length: u16,
-    pub unicode: [u16; Self::MAX_LENGTH],
+    #[cfg_attr(feature = "deku", deku(count = "length"))]
+    pub unicode: Vec<u16>,
 }
 
 impl HFSUniStr255 {
@@ -23,6 +28,9 @@ pub type TextEncoding = u32;
 /// Number of seconds since January 1, 1904, GMT.
 pub type Date = u32;
 
+#[derive(Debug)]
+#[cfg_attr(feature = "deku", derive(DekuRead))]
+#[cfg_attr(feature = "deku", deku(endian = "big"))]
 #[repr(C, packed)]
 pub struct HFSPlusBSDInfo {
     pub ownerID: u32,
@@ -42,6 +50,9 @@ pub union HFSPlusBSDInfo_special {
     pub rawDevice: u32,
 }
 
+#[derive(Debug)]
+#[cfg_attr(feature = "deku", derive(DekuRead))]
+#[cfg_attr(feature = "deku", deku(endian = "big", type="u32"))]
 #[repr(u32)]
 pub enum FileMode {
     S_ISUID = 0o004000,
@@ -74,16 +85,22 @@ pub enum FileMode {
     S_IFWHT = 0o160000,
 }
 
+#[cfg_attr(feature = "deku", derive(DekuRead))]
 #[repr(C, packed)]
 pub struct HFSPlusForkData {
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub logicalSize: u64,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub clumpSize: u32,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub totalBlocks: u32,
     pub extents: HFSPlusExtentRecord,
 }
 
 type HFSPlusExtentRecord = [HFSPlusExtentDescriptor; 8];
 
+#[cfg_attr(feature = "deku", derive(DekuRead))]
+#[cfg_attr(feature = "deku", deku(endian = "big"))]
 #[repr(C, packed)]
 pub struct HFSPlusExtentDescriptor {
     pub startBlock: u32,
@@ -92,34 +109,56 @@ pub struct HFSPlusExtentDescriptor {
 
 pub type HFSCatalogNodeID = u32;
 
+#[cfg_attr(feature = "deku", derive(DekuRead))]
 #[repr(C, packed)]
 pub struct HFSPlusVolumeHeader {
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub signature: u16,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub version: u16,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub attributes: u32,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub lastMountedVersion: u32,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub journalInfoBlock: u32,
 
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub createDate: u32,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub modifyDate: u32,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub backupDate: u32,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub checkedDate: u32,
 
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub fileCount: u32,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub folderCount: u32,
 
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub blockSize: u32,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub totalBlocks: u32,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub freeBlocks: u32,
 
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub nextAllocation: u32,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub rsrcClumpSize: u32,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub dataClumpSize: u32,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub nextCatalogID: HFSCatalogNodeID,
 
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub writeCount: u32,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub encodingsBitmap: u64,
 
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub finderInfo: [u32; 8],
 
     pub allocationFile: HFSPlusForkData,
@@ -129,6 +168,8 @@ pub struct HFSPlusVolumeHeader {
     pub startupFile: HFSPlusForkData,
 }
 
+#[cfg_attr(feature = "deku", derive(DekuRead))]
+#[cfg_attr(feature = "deku", deku(endian = "big", type = "u32"))]
 #[repr(u32)]
 pub enum VolumeAttributeBit {
     // Bits 0-6 are reserved
@@ -154,6 +195,8 @@ pub enum VolumeAttributeBit {
     // Bits 16-31 are reserved
 }
 
+#[cfg_attr(feature = "deku", derive(DekuRead))]
+#[cfg_attr(feature = "deku", deku(endian = "big"))]
 #[repr(C, packed)]
 pub struct BTNodeDescriptor {
     fLink: u32,
@@ -164,6 +207,8 @@ pub struct BTNodeDescriptor {
     reserved: u16,
 }
 
+#[cfg_attr(feature = "deku", derive(DekuRead))]
+#[cfg_attr(feature = "deku", deku(type = "i8"))]
 #[repr(i8)]
 pub enum BTreeNodeKind {
     kBTLeafNode = -1,
@@ -172,6 +217,8 @@ pub enum BTreeNodeKind {
     kBTMapNode = 2,
 }
 
+#[cfg_attr(feature = "deku", derive(DekuRead))]
+#[cfg_attr(feature = "deku", deku(endian = "big"))]
 #[repr(C, packed)]
 pub struct BTHeaderRec {
     pub treeDepth: u16,
@@ -223,9 +270,12 @@ pub enum WellKnownCnid {
     kHFSFirstUserCatalogNodeID = 16,
 }
 
+#[cfg_attr(feature = "deku", derive(DekuRead))]
 #[repr(C, packed)]
 pub struct HFSPlusCatalogKey {
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     keyLength: u32,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     parentID: HFSCatalogNodeID,
     nodeName: HFSUniStr255,
 }
@@ -241,39 +291,63 @@ pub enum BTNodeDescriptor_kind {
     kHFSPlusFileThreadRecord = 0x0004,
 }
 
+#[cfg_attr(feature = "deku", derive(DekuRead))]
 #[repr(C, packed)]
 pub struct HFSPlusCatalogFolder {
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub recordType: i16,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub flags: u16,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub valence: u32,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub folderID: HFSCatalogNodeID,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub createDate: u32,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub contentModDate: u32,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub attributeModDate: u32,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub accessDate: u32,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub backupDate: u32,
     pub permissions: HFSPlusBSDInfo,
     pub userInfo: FolderInfo,
     pub finderInfo: ExtendedFolderInfo,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub textEncoding: u32,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub reserved: u32,
 }
 
+#[cfg_attr(feature = "deku", derive(DekuRead))]
 #[repr(C, packed)]
 pub struct HFSPlusCatalogFile {
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub recordType: i16,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub flags: u16,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub reserved1: u32,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub fileID: HFSCatalogNodeID,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub createDate: u32,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub contentModDate: u32,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub attributeModDate: u32,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub accessDate: u32,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub backupDate: u32,
     pub permissions: HFSPlusBSDInfo,
     pub userInfo: FileInfo,
     pub finderInfo: ExtendedFileInfo,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub textEncoding: u32,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub reserved2: u32,
     pub dataFork: HFSPlusForkData,
     pub resourceFork: HFSPlusForkData,
@@ -300,12 +374,16 @@ pub struct HFSPlusCatalogThread {
     pub nodeName: HFSUniStr255,
 }
 
+#[cfg_attr(feature = "deku", derive(DekuRead))]
+#[cfg_attr(feature = "deku", deku(endian = "big"))]
 #[repr(C, packed)]
 pub struct Point {
     pub v: i16,
     pub h: i16,
 }
 
+#[cfg_attr(feature = "deku", derive(DekuRead))]
+#[cfg_attr(feature = "deku", deku(endian = "big"))]
 #[repr(C, packed)]
 pub struct Rect {
     pub top: i16,
@@ -357,15 +435,20 @@ pub enum ExtendedFinderFlags {
                                           /* info resource */
 }
 
+#[cfg_attr(feature = "deku", derive(DekuRead))]
 #[repr(C, packed)]
 pub struct FileInfo {
     pub fileType: OSType,    /* The type of the file */
     pub fileCreator: OSType, /* The file's creator */
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub finderFlags: u16,
     pub location: Point, /* File's location in the folder. */
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub reservedField: u16,
 }
 
+#[cfg_attr(feature = "deku", derive(DekuRead))]
+#[cfg_attr(feature = "deku", deku(endian = "big"))]
 #[repr(C, packed)]
 pub struct ExtendedFileInfo {
     pub reserved1: [i16; 4],
@@ -374,26 +457,36 @@ pub struct ExtendedFileInfo {
     pub putAwayFolderID: i16,
 }
 
+#[cfg_attr(feature = "deku", derive(DekuRead))]
 #[repr(C, packed)]
 pub struct FolderInfo {
     pub windowBounds: Rect, /* The position and dimension of the */
     /* folder's window */
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub finderFlags: u16,
     pub location: Point, /* Folder's location in the parent */
     /* folder. If set to {0, 0}, the Finder */
     /* will place the item automatically */
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub reservedField: u16,
 }
 
+#[cfg_attr(feature = "deku", derive(DekuRead))]
 #[repr(C, packed)]
 pub struct ExtendedFolderInfo {
     pub scrollPosition: Point, /* Scroll position (for icon views) */
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub reserved1: i32,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub extendedFinderFlags: u16,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub reserved2: i16,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub putAwayFolderID: i32,
 }
 
+#[cfg_attr(feature = "deku", derive(DekuRead))]
+#[cfg_attr(feature = "deku", deku(endian = "big"))]
 #[repr(C, packed)]
 pub struct HFSPlusExtentKey {
     pub keyLength: u16,
@@ -417,16 +510,22 @@ pub enum HFSPlusAttrForkData_recordType {
     kHFSPlusAttrExtents = 0x30,
 }
 
+#[cfg_attr(feature = "deku", derive(DekuRead))]
 #[repr(C, packed)]
 pub struct HFSPlusAttrForkData {
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub recordType: u32,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub reserved: u32,
     pub theFork: HFSPlusForkData,
 }
 
+#[cfg_attr(feature = "deku", derive(DekuRead))]
 #[repr(C, packed)]
 pub struct HFSPlusAttrExtents {
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub recordType: u32,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub reserved: u32,
     pub extents: HFSPlusExtentRecord,
 }
@@ -436,6 +535,8 @@ pub const kHFSPlusCreator: &[u8] = b"hfs+"; // 0x6866732B
 pub const kSymLinkFileType: &[u8] = b"slnk"; // 0x736C6E6B
 pub const kSymLinkCreator: &[u8] = b"rhap"; // 0x72686170
 
+#[cfg_attr(feature = "deku", derive(DekuRead))]
+#[cfg_attr(feature = "deku", deku(endian = "big"))]
 #[repr(C, packed)]
 pub struct JournalInfoBlock {
     pub flags: u32,
@@ -452,6 +553,8 @@ pub enum JournalInfoBlock_flags {
     kJIJournalNeedInitMask = 0x00000004,
 }
 
+#[cfg_attr(feature = "deku", derive(DekuRead))]
+#[cfg_attr(feature = "deku", deku(endian = "big"))]
 #[repr(C, packed)]
 pub struct journal_header {
     pub magic: u32,
@@ -467,16 +570,25 @@ pub struct journal_header {
 pub const JOURNAL_HEADER_MAGIC: u32 = 0x4a4e4c78;
 pub const ENDIAN_MAGIC: u32 = 0x12345678;
 
+#[cfg_attr(feature = "deku", derive(DekuRead))]
 #[repr(C, packed)]
-pub struct block_list_header<'a> {
+pub struct block_list_header {
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub max_blocks: u16,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub num_blocks: u16,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub bytes_used: u32,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub checksum: u32,
+    #[cfg_attr(feature = "deku", deku(endian = "big"))]
     pub pad: u32,
-    pub binfo: &'a [block_info],
+    /// The head of a singly-linked list of block info, chained by the `next` field.
+    pub binfo: block_info,
 }
 
+#[cfg_attr(feature = "deku", derive(DekuRead))]
+#[cfg_attr(feature = "deku", deku(endian = "big"))]
 #[repr(C, packed)]
 pub struct block_info {
     pub bnum: u64,
@@ -499,10 +611,13 @@ pub const HFC_VERSION: u32 = 1;
 pub const HFC_DEFAULT_DURATION: u32 = 3600 * 60;
 pub const HFC_MINIMUM_TEMPERATURE: u32 = 16;
 pub const HFC_MAXIMUM_FILESIZE: u32 = 10 * 1024 * 1024;
-pub const hfc_tag: &[u8] = b"CLUSTERED HOT FILES B-TREE     ";
+// Zero-terminated 32-byte string
+pub const hfc_tag: &[u8] = b"CLUSTERED HOT FILES B-TREE     \0";
 
+#[cfg_attr(feature = "deku", derive(DekuRead))]
+#[cfg_attr(feature = "deku", deku(endian = "big"))]
 #[repr(C, packed)]
-struct HotFilesInfo<'a> {
+struct HotFilesInfo {
     magic: u32,
     version: u32,
     duration: u32, /* duration of sample period */
@@ -511,9 +626,12 @@ struct HotFilesInfo<'a> {
     threshold: u32,
     maxfileblks: u32,
     maxfilecnt: u32,
-    tag: &'a [u8; 32],
+    /// Should be equal to hfc_tag
+    tag: [u8; 32],
 }
 
+#[cfg_attr(feature = "deku", derive(DekuRead))]
+#[cfg_attr(feature = "deku", deku(endian = "big"))]
 #[repr(C, packed)]
 pub struct HotFileKey {
     pub keyLength: u16,
@@ -530,7 +648,7 @@ const HFC_KEYLENGTH: usize = std::mem::size_of::<HotFileKey>() - std::mem::size_
 // I don't want to include the entire Unicode table, however it might be necessary to
 // reuse it to ensure compatibility.
 
-// TODO Add new parameters
+// TODO Add new parameters to HFS Offset Calculation
 // fn HFSPlusSectorToDiskSector(hfsPlusSector: u32) -> u32 {
 //     let mut embeddedDiskOffset: u32;
 
