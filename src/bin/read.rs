@@ -196,12 +196,12 @@ fn path_for_key(map: &BTreeMap<Vec<u8>, CatalogLeafRecord>, start: Vec<u8>) -> V
                     unreachable!("Unexpected file record in thread!");
                 }
                 CatalogLeafRecord::FolderThread(t) => {
-                    let dir_name = String::from_utf16_lossy(&t.node_name.string);
+                    let dir_name = String::from_utf16_lossy(&t.node_name.unicode);
                     path.push(dir_name);
                     cnid_to_key(t.parent_id)
                 }
                 CatalogLeafRecord::FileThread(t) => {
-                    let file_name = String::from_utf16_lossy(&t.node_name.string);
+                    let file_name = String::from_utf16_lossy(&t.node_name.unicode);
                     path.push(file_name);
                     cnid_to_key(t.parent_id)
                 }
