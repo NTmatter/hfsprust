@@ -3,23 +3,36 @@
 
 pub mod raw;
 
+#[cfg(feature = "deku")]
 use deku::prelude::*;
+#[cfg(feature = "deku")]
+use deku::ctx::Endian;
 use std::io;
 use std::io::{Cursor, Read};
 
 /// Unicode 2.0 String. Defined in TN1150 > HFS Plus Names.
 /// Strings are stored fully-decomposed in canonical order.
-#[derive(Debug, DekuRead)]
+#[cfg(feature = "deku")]
+#[deku_derive(DekuRead)]
+#[deku(endian = "endian", ctx = "endian: Endian")]
 pub struct HFSUniStr255 {
-    #[deku(endian = "big")]
+    #[deku(temp)]
     pub length: u16,
-    #[deku(count = "length", endian = "big")]
-    pub string: Vec<u16>,
+    #[deku(count = "length")]
+    pub unicode: Vec<u16>,
+}
+
+// Manual reimplementation to handle issues with `#[deku(temp)]` macro.
+// See https://github.com/sharksforarms/deku/issues/343
+#[cfg(not(feature = "deku"))]
+pub struct HFSUniStr255 {
+    pub length: u16,
+    pub unicode: Vec<u16>,
 }
 
 impl Into<String> for HFSUniStr255 {
     fn into(self) -> String {
-        String::from_utf16_lossy(self.string.as_slice())
+        String::from_utf16_lossy(self.unicode.as_slice())
     }
 }
 
