@@ -396,7 +396,8 @@ impl BTreeAllocationMapRecord {
 
 /// Information about a catalog file.
 /// Defined as `struct HFSPlusCatalogKey` in TN1150 > Catalog File.
-#[derive(DekuRead)]
+#[cfg_attr(feature = "deku", derive(DekuRead))]
+#[cfg_attr(feature = "deku", deku(endian = "endian", ctx = "endian: Endian"))]
 pub struct CatalogFileKey {
     #[deku(endian = "big")]
     pub length: u16,
@@ -405,6 +406,7 @@ pub struct CatalogFileKey {
     pub name: HFSUniStr255,
 }
 
+// TODO Deku chould handle parsing CatalogFileKey from bytes.
 impl TryFrom<Vec<u8>> for CatalogFileKey {
     type Error = io::Error;
 
@@ -441,8 +443,9 @@ impl TryFrom<Vec<u8>> for CatalogFileKey {
         }
 
         let name = HFSUniStr255 {
+            #[cfg(not(feature = "deku"))]
             length: char_count as u16,
-            string,
+            unicode: string,
         };
 
         Ok(Self {
@@ -453,18 +456,19 @@ impl TryFrom<Vec<u8>> for CatalogFileKey {
     }
 }
 
+// TODO Deku should handle serializing CatalogFileKey to bytes.
 impl Into<Vec<u8>> for CatalogFileKey {
     fn into(self) -> Vec<u8> {
         let len =  4 // Parent CNID (u32) 
             + 2 // Name Length (u16) 
-            + 2 * self.name.length // Bytes
+            + 2 * self.name.unicode.len() // Bytes
             ;
 
         let mut out = Vec::<u8>::with_capacity(len as usize);
         out.extend_from_slice(self.parent.to_be_bytes().as_slice());
-        out.extend_from_slice(self.name.length.to_be_bytes().as_slice());
+        out.extend_from_slice((self.name.unicode.len() as u16).to_be_bytes().as_slice());
         self.name
-            .string
+            .unicode
             .iter()
             .for_each(|c16| out.extend_from_slice(c16.to_be_bytes().as_slice()));
 
@@ -477,7 +481,9 @@ impl Into<Vec<u8>> for CatalogFileKey {
 /// TN1150 > Catalog File Data.
 #[allow(non_camel_case_types, clippy::enum_variant_names)]
 #[derive(Debug, PartialEq, DekuRead)]
-#[deku(type = "u16", endian = "big")]
+// #[deku(type = "u16", endian = "big")]
+#[deku(endian = "endian", ctx = "endian: Endian")]
+#[deku(type = "u16")]
 #[repr(u16)]
 pub enum CatalogFileDataType {
     kHFSPlusFolderRecord = 0x0001,
@@ -535,6 +541,7 @@ pub enum BTreeKeyCompareType {
 /// BTree leaf node for Folders. Defined as `struct HFSPlusCatalogFolder`
 /// in TN1150 > Catalog Folder Records
 #[derive(Debug, DekuRead)]
+#[deku(endian = "endian", ctx = "endian: Endian")]
 pub struct CatalogFolder {
     /// Always CatalogFolderDataType::kHFSPlusFolderRecord
     pub record_type: CatalogFileDataType,
@@ -553,7 +560,6 @@ pub struct CatalogFolder {
     pub reserved: u32,
 }
 
-#[derive(Debug)]
 pub enum CatalogLeafRecord {
     Folder(CatalogFolder),
     File(CatalogFile),
@@ -614,7 +620,7 @@ pub struct CatalogFile {
 
 /// BTree link to CNID. Defined as `struct HFSPlusCatalogThread` in
 /// TN1150 > Catalog Thread Records.
-#[derive(Debug, DekuRead)]
+#[derive(DekuRead)]
 pub struct CatalogThread {
     pub record_type: CatalogFileDataType,
     #[deku(endian = "big")]
