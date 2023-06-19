@@ -620,7 +620,10 @@ enum CatalogFileBitMask {
 /// TN1150 > Catalog File Records
 #[derive(Debug)]
 #[cfg_attr(feature = "deku", derive(DekuRead))]
-#[cfg_attr(feature = "deku", deku(endian = "big"))]
+#[cfg_attr(
+    feature = "deku",
+    deku(endian = "endian", ctx = "endian: Endian", ctx_default = "Endian::Big")
+)]
 pub struct CatalogFile {
     pub record_type: CatalogFileDataType,
     pub flags: u16,
@@ -644,7 +647,10 @@ pub struct CatalogFile {
 /// BTree link to CNID. Defined as `struct HFSPlusCatalogThread` in
 /// TN1150 > Catalog Thread Records.
 #[cfg_attr(feature = "deku", derive(DekuRead))]
-#[cfg_attr(feature = "deku", deku(endian = "endian", ctx = "endian: Endian"))]
+#[cfg_attr(
+    feature = "deku",
+    deku(endian = "endian", ctx = "endian: Endian", ctx_default = "Endian::Big")
+)]
 pub struct CatalogThread {
     pub record_type: CatalogFileDataType,
     #[deku(endian = "big")]
@@ -658,7 +664,10 @@ pub struct CatalogThread {
 /// Defined in TN1150 > Finder Info.
 #[derive(Debug)]
 #[cfg_attr(feature = "deku", derive(DekuRead))]
-#[cfg_attr(feature = "deku", deku(endian = "endian", ctx = "endian: Endian"))]
+#[cfg_attr(
+    feature = "deku",
+    deku(endian = "endian", ctx = "endian: Endian", ctx_default = "Endian::Big")
+)]
 struct Point {
     v: i16,
     h: i16,

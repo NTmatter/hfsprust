@@ -1,4 +1,7 @@
+use deku::bitvec::BitSlice;
+use deku::ctx::Endian;
 use deku::DekuContainerRead;
+use deku::DekuRead;
 use hfsprust::*;
 use itertools::{rciter, Itertools};
 use sha2::{Digest, Sha256};
@@ -47,7 +50,9 @@ fn main() -> Result<(), io::Error> {
         .read_exact_at(&mut buf, 1024)
         .expect("Read volume header");
 
-    let (_rest, volume_header) = VolumeHeader::from_bytes((&buf, 0)).expect("Parse volume header");
+    let buf = BitSlice::from_slice(&buf);
+    let (_rest, volume_header) =
+        VolumeHeader::read(&buf, Endian::Big).expect("Parse volume header");
 
     // Extract useful information:
     println!("Sucessfully parsed volume header.");
@@ -227,7 +232,9 @@ fn read_btree_node(
     // Read Node Descriptor
     let mut buf = [0; BTreeNodeDescriptor::SIZE];
     cursor.read_exact(&mut buf)?;
-    let (_rest, node_descriptor) = BTreeNodeDescriptor::from_bytes((&mut buf, 0))?;
+    // let (_rest, node_descriptor) = BTreeNodeDescriptor::from_bytes((&mut buf, 0))?;
+    let buf = BitSlice::from_slice(&buf);
+    let (_rest, node_descriptor) = BTreeNodeDescriptor::read(&buf, Endian::Big)?;
 
     // Read record offsets and free space offset from end of node.
     let offset_count = node_descriptor.num_records as usize + 1;
@@ -266,12 +273,15 @@ fn read_btree_header(
     // Read BTree Descriptor
     let mut buf = [0; BTreeNodeDescriptor::SIZE];
     stream.read_exact(&mut buf)?;
-    let (_rest, node_descriptor) = BTreeNodeDescriptor::from_bytes((&mut buf, 0))?;
+    let buf = BitSlice::from_slice(&buf);
+
+    let (_rest, node_descriptor) = BTreeNodeDescriptor::read(&buf, Endian::Big)?;
 
     // Read Header Record
     let mut buf = [0; BTreeHeaderRecord::SIZE];
     stream.read_exact(&mut buf)?;
-    let (_rest, btree_header) = BTreeHeaderRecord::from_bytes((&mut buf, 0))?;
+    let buf = BitSlice::from_slice(&buf);
+    let (_rest, btree_header) = BTreeHeaderRecord::read(&buf, Endian::Big)?;
 
     // User Data is 128 bytes of reserved data. Skip it for now.
     let mut buf = [0; BTreeUserDataRecord::SIZE];
@@ -407,25 +417,26 @@ fn parse_catalog_leaf(record: &Vec<u8>) -> Result<(Vec<u8>, CatalogLeafRecord), 
     cur.read_to_end(&mut rest)?;
 
     // Peek at record kind
-    let mut buf = vec![rest[0], rest[1]];
-    let (_rest, kind) = CatalogFileDataType::from_bytes((&mut buf, 0))?;
+    let buf = vec![rest[0], rest[1]];
+    let buf = BitSlice::from_slice(&buf);
+    let (rest, kind) = CatalogFileDataType::read(&buf, Endian::Big)?;
 
     // Parse payload
     let record = match kind {
         CatalogFileDataType::kHFSPlusFolderRecord => {
-            let (_rest, folder) = CatalogFolder::from_bytes((&rest, 0))?;
+            let (_rest, folder) = CatalogFolder::read(&rest, Endian::Big)?;
             CatalogLeafRecord::Folder(folder)
         }
         CatalogFileDataType::kHFSPlusFileRecord => {
-            let (_rest, file) = CatalogFile::from_bytes((&rest, 0))?;
+            let (_rest, file) = CatalogFile::read(&rest, Endian::Big)?;
             CatalogLeafRecord::File(file)
         }
         CatalogFileDataType::kHFSPlusFolderThreadRecord => {
-            let (_rest, folder_thread) = CatalogThread::from_bytes((&rest, 0))?;
+            let (_rest, folder_thread) = CatalogThread::read(&rest, Endian::Big)?;
             CatalogLeafRecord::FolderThread(folder_thread)
         }
         CatalogFileDataType::kHFSPlusFileThreadRecord => {
-            let (_rest, file_thread) = CatalogThread::from_bytes((&rest, 0))?;
+            let (_rest, file_thread) = CatalogThread::read(&rest, Endian::Big)?;
             CatalogLeafRecord::FileThread(file_thread)
         }
     };
