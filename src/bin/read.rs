@@ -1,5 +1,4 @@
 use deku::bitvec::BitSlice;
-use deku::ctx::Endian;
 use deku::DekuContainerRead;
 use deku::DekuRead;
 use hfsprust::*;
@@ -29,7 +28,10 @@ fn main() -> Result<(), io::Error> {
         .expect("Path to output directory as second argument");
     println!("Writing to {output_root_path}");
 
-    let mut volume_file = File::options().read(true).open(volume_file_path)?;
+    let mut volume_file = File::options()
+        .read(true)
+        .open(volume_file_path)
+        .expect("Open volume image for reading");
 
     // Leading zeroes at start of file
     const PREAMBLE_LENGTH: usize = 1024;
@@ -50,8 +52,7 @@ fn main() -> Result<(), io::Error> {
         .expect("Read volume header");
 
     let buf = BitSlice::from_slice(&buf);
-    let (_rest, volume_header) =
-        VolumeHeader::read(&buf, Endian::Big).expect("Parse volume header");
+    let (_rest, volume_header) = VolumeHeader::read(&buf, ()).expect("Parse volume header");
 
     // Extract useful information:
     println!("Sucessfully parsed volume header.");
@@ -133,10 +134,10 @@ fn main() -> Result<(), io::Error> {
 
                 // Skip HFS Private Data and various Metadata
                 if original_file_path.contains(&String::from("\0\0\0\0HFS+ Private Data"))
-                    || original_file_path.contains(&String::from(".Spotlight-V100"))
-                    || original_file_path.contains(&String::from(".journal"))
                     || original_file_path.contains(&String::from(".DS_Store"))
+                    || original_file_path.contains(&String::from(".Spotlight-V100"))
                     || original_file_path.contains(&String::from(".journal_info_block"))
+                    || original_file_path.contains(&String::from(".journal"))
                     || original_file_path.contains(&String::from(".fseventsd"))
                 {
                     println!("Skipping {original_file_path:?}");
@@ -233,7 +234,7 @@ fn read_btree_node(
     cursor.read_exact(&mut buf)?;
     // let (_rest, node_descriptor) = BTreeNodeDescriptor::from_bytes((&mut buf, 0))?;
     let buf = BitSlice::from_slice(&buf);
-    let (_rest, node_descriptor) = BTreeNodeDescriptor::read(&buf, Endian::Big)?;
+    let (_rest, node_descriptor) = BTreeNodeDescriptor::read(&buf, ())?;
 
     // Read record offsets and free space offset from end of node.
     let offset_count = node_descriptor.num_records as usize + 1;
@@ -274,13 +275,13 @@ fn read_btree_header(
     stream.read_exact(&mut buf)?;
     let buf = BitSlice::from_slice(&buf);
 
-    let (_rest, node_descriptor) = BTreeNodeDescriptor::read(&buf, Endian::Big)?;
+    let (_rest, node_descriptor) = BTreeNodeDescriptor::read(&buf, ())?;
 
     // Read Header Record
     let mut buf = [0; BTreeHeaderRecord::SIZE];
     stream.read_exact(&mut buf)?;
     let buf = BitSlice::from_slice(&buf);
-    let (_rest, btree_header) = BTreeHeaderRecord::read(&buf, Endian::Big)?;
+    let (_rest, btree_header) = BTreeHeaderRecord::read(&buf, ())?;
 
     // User Data is 128 bytes of reserved data. Skip it for now.
     let mut buf = [0; BTreeUserDataRecord::SIZE];
@@ -418,24 +419,24 @@ fn parse_catalog_leaf(record: &Vec<u8>) -> Result<(Vec<u8>, CatalogLeafRecord), 
     // Peek at record kind
     let buf = vec![rest[0], rest[1]];
     let buf = BitSlice::from_slice(&buf);
-    let (rest, kind) = CatalogFileDataType::read(&buf, Endian::Big)?;
+    let (rest, kind) = CatalogFileDataType::read(&buf, ())?;
 
     // Parse payload
     let record = match kind {
         CatalogFileDataType::kHFSPlusFolderRecord => {
-            let (_rest, folder) = CatalogFolder::read(&rest, Endian::Big)?;
+            let (_rest, folder) = CatalogFolder::read(&rest, ())?;
             CatalogLeafRecord::Folder(folder)
         }
         CatalogFileDataType::kHFSPlusFileRecord => {
-            let (_rest, file) = CatalogFile::read(&rest, Endian::Big)?;
+            let (_rest, file) = CatalogFile::read(&rest, ())?;
             CatalogLeafRecord::File(file)
         }
         CatalogFileDataType::kHFSPlusFolderThreadRecord => {
-            let (_rest, folder_thread) = CatalogThread::read(&rest, Endian::Big)?;
+            let (_rest, folder_thread) = CatalogThread::read(&rest, ())?;
             CatalogLeafRecord::FolderThread(folder_thread)
         }
         CatalogFileDataType::kHFSPlusFileThreadRecord => {
-            let (_rest, file_thread) = CatalogThread::read(&rest, Endian::Big)?;
+            let (_rest, file_thread) = CatalogThread::read(&rest, ())?;
             CatalogLeafRecord::FileThread(file_thread)
         }
     };

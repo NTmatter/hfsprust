@@ -52,7 +52,7 @@ pub union HFSPlusBSDInfo_special {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "deku", derive(DekuRead))]
-#[cfg_attr(feature = "deku", deku(endian = "big", type="u32"))]
+#[cfg_attr(feature = "deku", deku(endian = "big", type = "u32"))]
 #[repr(u32)]
 pub enum FileMode {
     S_ISUID = 0o004000,
@@ -168,6 +168,7 @@ pub struct HFSPlusVolumeHeader {
     pub startupFile: HFSPlusForkData,
 }
 
+// TODO Convert to Deku Bitfield.
 #[cfg_attr(feature = "deku", derive(DekuRead))]
 #[cfg_attr(feature = "deku", deku(endian = "big", type = "u32"))]
 #[repr(u32)]

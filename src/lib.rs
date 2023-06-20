@@ -13,8 +13,8 @@ use std::io::{Cursor, Read};
 /// Unicode 2.0 String. Defined in TN1150 > HFS Plus Names.
 /// Strings are stored fully-decomposed in canonical order.
 #[cfg(feature = "deku")]
-#[cfg_attr(feature = "deku", deku_derive(DekuRead))]
-#[deku(endian = "endian", ctx = "endian: Endian")]
+#[deku_derive(DekuRead)]
+#[deku(endian = "endian", ctx = "endian: Endian", ctx_default = "Endian::Big")]
 pub struct HFSUniStr255 {
     #[deku(temp)]
     pub length: u16,
@@ -98,7 +98,10 @@ type Date = u32;
 /// special info.
 #[derive(Debug)]
 #[cfg_attr(feature = "deku", derive(DekuRead))]
-#[cfg_attr(feature = "deku", deku(endian = "endian", ctx = "endian: Endian"))]
+#[cfg_attr(
+    feature = "deku",
+    deku(endian = "endian", ctx = "endian: Endian", ctx_default = "Endian::Big")
+)]
 pub struct BsdInfoSpecial {
     /// May represent an inode number, link count, or raw device
     special: u32,
@@ -111,15 +114,15 @@ pub struct BsdInfoSpecial {
 /// TN1150 > HFS Plus Permissions.
 #[derive(Debug)]
 #[cfg_attr(feature = "deku", derive(DekuRead))]
-#[cfg_attr(feature = "deku", deku(endian = "endian", ctx = "endian: Endian"))]
+#[cfg_attr(
+    feature = "deku",
+    deku(endian = "endian", ctx = "endian: Endian", ctx_default = "Endian::Big")
+)]
 pub struct BsdInfo {
-    #[deku(endian = "big")]
     owner_id: u32,
-    #[deku(endian = "big")]
     group_id: u32,
     admin_flags: u8,
     owner_flags: u8,
-    #[deku(endian = "big")]
     file_mode: u16,
     special: BsdInfoSpecial,
 }
@@ -164,7 +167,10 @@ enum FileMode {
 /// TN1150 > Fork Data Structure.
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "deku", derive(DekuRead))]
-#[cfg_attr(feature = "deku", deku(endian = "endian", ctx = "endian: Endian"))]
+#[cfg_attr(
+    feature = "deku",
+    deku(endian = "endian", ctx = "endian: Endian", ctx_default = "Endian::Big")
+)]
 pub struct ExtentDescriptor {
     pub start_block: u32,
     pub block_count: u32,
@@ -184,7 +190,10 @@ pub type ExtentRecord = [ExtentDescriptor; 8];
 /// TN1150 > Fork Data Structure.
 #[derive(Debug)]
 #[cfg_attr(feature = "deku", derive(DekuRead))]
-#[cfg_attr(feature = "deku", deku(endian = "endian", ctx = "endian: Endian"))]
+#[cfg_attr(
+    feature = "deku",
+    deku(endian = "endian", ctx = "endian: Endian", ctx_default = "Endian::Big")
+)]
 pub struct ForkData {
     pub logical_size: u64,
     pub clump_size: u32,
@@ -228,55 +237,38 @@ enum VolumeAttributeBit {
 /// TN1150 > Volume Header.
 #[derive(Debug)]
 #[cfg_attr(feature = "deku", derive(DekuRead))]
-#[cfg_attr(feature = "deku", deku(endian = "endian", ctx = "endian: Endian"))]
+#[cfg_attr(
+    feature = "deku",
+    deku(endian = "endian", ctx = "endian: Endian", ctx_default = "Endian::Big")
+)]
 pub struct VolumeHeader {
-    #[deku(endian = "big")]
     pub signature: u16,
-    #[deku(endian = "big")]
     pub version: u16,
-    #[deku(endian = "big")]
     pub attributes: u32,
-    #[deku(endian = "big")]
     pub last_mounted_version: u32,
-    #[deku(endian = "big")]
     pub journal_info_block: u32,
 
-    #[deku(endian = "big")]
     pub create_date: Date,
-    #[deku(endian = "big")]
     pub modify_date: Date,
-    #[deku(endian = "big")]
     pub backup_date: Date,
-    #[deku(endian = "big")]
     pub checked_date: Date,
 
-    #[deku(endian = "big")]
     pub file_count: u32,
-    #[deku(endian = "big")]
     pub folder_count: u32,
 
-    #[deku(endian = "big")]
     pub block_size: u32,
-    #[deku(endian = "big")]
     pub total_blocks: u32,
-    #[deku(endian = "big")]
     pub free_blocks: u32,
 
-    #[deku(endian = "big")]
     pub next_allocation: u32,
-    #[deku(endian = "big")]
     pub rsrc_clump_size: u32,
-    #[deku(endian = "big")]
     pub data_clump_size: u32,
-    #[deku(endian = "big")]
     pub next_catalog_id: CatalogNodeId,
 
-    #[deku(endian = "big")]
     pub write_count: u32,
-    #[deku(endian = "big")]
+
     pub encodings_bitmap: u64,
 
-    #[deku(endian = "big")]
     pub finder_info: [u32; 8],
 
     pub allocation_file: ForkData,
@@ -310,17 +302,16 @@ pub enum StandardCnid {
 /// Defined as `struct BTNodeDescriptor` in TN1150 > Node Structure.
 #[derive(Debug)]
 #[cfg_attr(feature = "deku", derive(DekuRead))]
-#[cfg_attr(feature = "deku", deku(endian = "endian", ctx = "endian: Endian"))]
+#[cfg_attr(
+    feature = "deku",
+    deku(endian = "endian", ctx = "endian: Endian", ctx_default = "Endian::Big")
+)]
 pub struct BTreeNodeDescriptor {
-    #[deku(endian = "big")]
     pub forward_link: u32,
-    #[deku(endian = "big")]
     pub backward_link: u32,
     pub kind: BTreeNodeKind,
     pub height: u8,
-    #[deku(endian = "big")]
     pub num_records: u16,
-    #[deku(endian = "big")]
     pub reserved: u16,
 }
 
@@ -335,7 +326,12 @@ impl BTreeNodeDescriptor {
 #[cfg_attr(feature = "deku", derive(DekuRead))]
 #[cfg_attr(
     feature = "deku",
-    deku(endian = "endian", ctx = "endian: Endian", type = "i8")
+    deku(
+        endian = "endian",
+        ctx = "endian: Endian",
+        ctx_default = "Endian::Big",
+        type = "i8"
+    )
 )]
 #[repr(i8)]
 pub enum BTreeNodeKind {
@@ -348,35 +344,25 @@ pub enum BTreeNodeKind {
 /// BTree Header describing upcoming BTree Structure.
 #[derive(Debug)]
 #[cfg_attr(feature = "deku", derive(DekuRead))]
-#[cfg_attr(feature = "deku", deku(endian = "endian", ctx = "endian: Endian"))]
+#[cfg_attr(
+    feature = "deku",
+    deku(endian = "endian", ctx = "endian: Endian", ctx_default = "Endian::Big")
+)]
 pub struct BTreeHeaderRecord {
-    #[deku(endian = "big")]
     pub tree_depth: u16,
-    #[deku(endian = "big")]
     pub root_node: u32,
-    #[deku(endian = "big")]
     pub leaf_records: u32,
-    #[deku(endian = "big")]
     pub first_leaf_node: u32,
-    #[deku(endian = "big")]
     pub last_leaf_node: u32,
-    #[deku(endian = "big")]
     pub node_size: u16,
-    #[deku(endian = "big")]
     pub max_key_length: u16,
-    #[deku(endian = "big")]
     pub total_nodes: u32,
-    #[deku(endian = "big")]
     pub free_nodes: u32,
-    #[deku(endian = "big")]
     pub reserved_1: u16,
-    #[deku(endian = "big")]
     pub clump_size: u32,
     pub btree_type: BTreeType,
     pub key_compare_type: BTreeKeyCompareType,
-    #[deku(endian = "big")]
     pub attributes: u32,
-    #[deku(endian = "big")]
     pub reserved_3: [u32; 16],
 }
 
@@ -417,7 +403,10 @@ impl BTreeAllocationMapRecord {
 /// Information about a catalog file.
 /// Defined as `struct HFSPlusCatalogKey` in TN1150 > Catalog File.
 #[cfg_attr(feature = "deku", derive(DekuRead))]
-#[cfg_attr(feature = "deku", deku(endian = "endian", ctx = "endian: Endian"))]
+#[cfg_attr(
+    feature = "deku",
+    deku(endian = "endian", ctx = "endian: Endian", ctx_default = "Endian::Big")
+)]
 pub struct CatalogFileKey {
     #[deku(endian = "big")]
     pub length: u16,
@@ -504,7 +493,12 @@ impl Into<Vec<u8>> for CatalogFileKey {
 #[cfg_attr(feature = "deku", derive(DekuRead))]
 #[cfg_attr(
     feature = "deku",
-    deku(endian = "endian", ctx = "endian: Endian", type = "u16")
+    deku(
+        endian = "endian",
+        ctx = "endian: Endian",
+        ctx_default = "Endian::Big",
+        type = "u16"
+    )
 )]
 #[repr(u16)]
 pub enum CatalogFileDataType {
@@ -538,7 +532,12 @@ enum CatalogFolderDataType {
 #[cfg_attr(feature = "deku", derive(DekuRead))]
 #[cfg_attr(
     feature = "deku",
-    deku(endian = "endian", ctx = "endian: Endian", type = "u8")
+    deku(
+        endian = "endian",
+        ctx = "endian: Endian",
+        ctx_default = "Endian::Big",
+        type = "u8"
+    )
 )]
 #[repr(u8)]
 pub enum BTreeType {
@@ -555,7 +554,12 @@ pub enum BTreeType {
 #[cfg_attr(feature = "deku", derive(DekuRead))]
 #[cfg_attr(
     feature = "deku",
-    deku(endian = "endian", ctx = "endian: Endian", type = "u8")
+    deku(
+        endian = "endian",
+        ctx = "endian: Endian",
+        ctx_default = "Endian::Big",
+        type = "u8"
+    )
 )]
 #[repr(u8)]
 pub enum BTreeKeyCompareType {
@@ -572,7 +576,10 @@ pub enum BTreeKeyCompareType {
 /// in TN1150 > Catalog Folder Records
 #[derive(Debug)]
 #[cfg_attr(feature = "deku", derive(DekuRead))]
-#[cfg_attr(feature = "deku", deku(endian = "endian", ctx = "endian: Endian"))]
+#[cfg_attr(
+    feature = "deku",
+    deku(endian = "endian", ctx = "endian: Endian", ctx_default = "Endian::Big")
+)]
 pub struct CatalogFolder {
     /// Always CatalogFolderDataType::kHFSPlusFolderRecord
     pub record_type: CatalogFileDataType,
@@ -677,7 +684,10 @@ struct Point {
 /// Defined in TN1150 > Finder Info.
 #[derive(Debug)]
 #[cfg_attr(feature = "deku", derive(DekuRead))]
-#[cfg_attr(feature = "deku", deku(endian = "endian", ctx = "endian: Endian"))]
+#[cfg_attr(
+    feature = "deku",
+    deku(endian = "endian", ctx = "endian: Endian", ctx_default = "Endian::Big")
+)]
 struct Rect {
     top: i16,
     left: i16,
@@ -693,7 +703,10 @@ type OSType = u32;
 /// Defined in TN1150 > Finder Info.
 #[derive(Debug)]
 #[cfg_attr(feature = "deku", derive(DekuRead))]
-#[cfg_attr(feature = "deku", deku(endian = "endian", ctx = "endian: Endian"))]
+#[cfg_attr(
+    feature = "deku",
+    deku(endian = "endian", ctx = "endian: Endian", ctx_default = "Endian::Big")
+)]
 pub struct FileInfo {
     #[deku(endian = "big")]
     file_type: OSType,
@@ -710,7 +723,10 @@ pub struct FileInfo {
 /// Defined in TN1150 > Finder Info.
 #[derive(Debug)]
 #[cfg_attr(feature = "deku", derive(DekuRead))]
-#[cfg_attr(feature = "deku", deku(endian = "endian", ctx = "endian: Endian"))]
+#[cfg_attr(
+    feature = "deku",
+    deku(endian = "endian", ctx = "endian: Endian", ctx_default = "Endian::Big")
+)]
 pub struct ExtendedFileInfo {
     reserved_1: [i16; 4],
     extended_finder_flags: u16,
@@ -756,7 +772,10 @@ enum FileInfoFinderFlags {
 /// Defined in TN1150 > Finder Info.
 #[derive(Debug)]
 #[cfg_attr(feature = "deku", derive(DekuRead))]
-#[cfg_attr(feature = "deku", deku(endian = "endian", ctx = "endian: Endian"))]
+#[cfg_attr(
+    feature = "deku",
+    deku(endian = "endian", ctx = "endian: Endian", ctx_default = "Endian::Big")
+)]
 pub struct FolderInfo {
     window_bounds: Rect,
     finder_flags: u16,
@@ -768,7 +787,10 @@ pub struct FolderInfo {
 /// Defined in TN1150 > Finder Info.
 #[derive(Debug)]
 #[cfg_attr(feature = "deku", derive(DekuRead))]
-#[cfg_attr(feature = "deku", deku(endian = "endian", ctx = "endian: Endian"))]
+#[cfg_attr(
+    feature = "deku",
+    deku(endian = "endian", ctx = "endian: Endian", ctx_default = "Endian::Big")
+)]
 pub struct ExtendedFolderInfo {
     scroll_position: Point,
     reserved_1: i32,
