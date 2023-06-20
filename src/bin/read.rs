@@ -3,12 +3,11 @@ use deku::ctx::Endian;
 use deku::DekuContainerRead;
 use deku::DekuRead;
 use hfsprust::*;
-use itertools::{rciter, Itertools};
+use itertools::Itertools;
 use sha2::{Digest, Sha256};
-use std::alloc::alloc;
 use std::collections::BTreeMap;
 use std::fs::File;
-use std::io::{self, BufRead, Cursor, Read, Seek, SeekFrom, Write};
+use std::io::{self, Cursor, Read, Seek, SeekFrom, Write};
 use std::os::unix::prelude::FileExt;
 use std::path::PathBuf;
 use std::{env, fs};
@@ -220,7 +219,7 @@ fn path_for_key(map: &BTreeMap<Vec<u8>, CatalogLeafRecord>, start: Vec<u8>) -> V
 
 fn read_btree_node(
     stream: &mut (impl Read + Seek),
-    block_size: usize,
+    _block_size: usize,
     record_size: usize,
 ) -> Result<(BTreeNodeDescriptor, Vec<Vec<u8>>), io::Error> {
     // Consume entire record and operate on in-memory cursor.
@@ -268,7 +267,7 @@ fn read_btree_node(
 /// Manually read the BTree header to bootstrap the rest of the read.
 fn read_btree_header(
     stream: &mut (impl Read + Seek),
-    block_size: usize,
+    _block_size: usize,
 ) -> Result<(BTreeNodeDescriptor, BTreeHeaderRecord), io::Error> {
     // Read BTree Descriptor
     let mut buf = [0; BTreeNodeDescriptor::SIZE];
