@@ -51,6 +51,14 @@ struct HFSPlusVolumeHeader {
 
 };
 
+struct JournalInfoBlock {
+  be u32 flags;
+  be u32 device_signature[8];
+  be u64 offset;
+  be u64 size;
+  be u32 reserved[32];
+};
+
 struct BTNodeDescriptor {
   be u32 fLink;
   be u32 bLink;
@@ -107,6 +115,7 @@ struct HFSVolume {
     // BTree extentFile @ header.extentsFile.extents[0].startBlock * header.blockSize;
     BTree catalogFile @ header.catalogFile.extents[0].startBlock * header.blockSize;
     // BTree attributesFile @ header.attributesFile.extents[0].startBlock * header.blockSize;
+    JournalInfoBlock journal_info @ header.journalInfoBlock * header.blockSize;
 };
 
 HFSVolume volume @0x00;
