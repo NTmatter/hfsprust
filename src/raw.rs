@@ -539,6 +539,7 @@ pub const kHFSPlusCreator: &[u8] = b"hfs+"; // 0x6866732B
 pub const kSymLinkFileType: &[u8] = b"slnk"; // 0x736C6E6B
 pub const kSymLinkCreator: &[u8] = b"rhap"; // 0x72686170
 
+#[derive(Debug)]
 #[cfg_attr(feature = "deku", derive(DekuRead))]
 #[cfg_attr(feature = "deku", deku(endian = "big"))]
 #[repr(C, packed)]

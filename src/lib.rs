@@ -232,6 +232,132 @@ enum VolumeAttributeBit {
     // Bits 16-31 are reserved
 }
 
+// Flags are defined in reverse order to handle deku#134
+// see https://github.com/sharksforarms/deku/issues/134
+#[derive(Debug)]
+#[cfg_attr(feature = "deku", derive(DekuRead))]
+#[cfg_attr(
+    feature = "deku",
+    deku(endian = "endian", ctx = "endian: Endian", ctx_default = "Endian::Big")
+)]
+struct VolumeAttribute {
+    // Bits 16-31 are reserved.
+    #[cfg_attr(feature = "deku", deku(bits = 1, assert = "*reserved_31 == false"))]
+    reserved_31: bool,
+    #[cfg_attr(feature = "deku", deku(bits = 1, assert = "*reserved_30 == false"))]
+    reserved_30: bool,
+    #[cfg_attr(feature = "deku", deku(bits = 1, assert = "*reserved_29 == false"))]
+    reserved_29: bool,
+    #[cfg_attr(feature = "deku", deku(bits = 1, assert = "*reserved_28 == false"))]
+    reserved_28: bool,
+    #[cfg_attr(feature = "deku", deku(bits = 1, assert = "*reserved_27 == false"))]
+    reserved_27: bool,
+    #[cfg_attr(feature = "deku", deku(bits = 1, assert = "*reserved_26 == false"))]
+    reserved_26: bool,
+    #[cfg_attr(feature = "deku", deku(bits = 1, assert = "*reserved_25 == false"))]
+    reserved_25: bool,
+    #[cfg_attr(feature = "deku", deku(bits = 1, assert = "*reserved_24 == false"))]
+    reserved_24: bool,
+    #[cfg_attr(feature = "deku", deku(bits = 1, assert = "*reserved_23 == false"))]
+    reserved_23: bool,
+    #[cfg_attr(feature = "deku", deku(bits = 1, assert = "*reserved_22 == false"))]
+    reserved_22: bool,
+    #[cfg_attr(feature = "deku", deku(bits = 1, assert = "*reserved_21 == false"))]
+    reserved_21: bool,
+    #[cfg_attr(feature = "deku", deku(bits = 1, assert = "*reserved_20 == false"))]
+    reserved_20: bool,
+    #[cfg_attr(feature = "deku", deku(bits = 1, assert = "*reserved_19 == false"))]
+    reserved_19: bool,
+    #[cfg_attr(feature = "deku", deku(bits = 1, assert = "*reserved_18 == false"))]
+    reserved_18: bool,
+    #[cfg_attr(feature = "deku", deku(bits = 1, assert = "*reserved_17 == false"))]
+    reserved_17: bool,
+    #[cfg_attr(feature = "deku", deku(bits = 1, assert = "*reserved_16 == false"))]
+    reserved_16: bool,
+
+    #[cfg_attr(feature = "deku", deku(bits = 1))]
+    software_lock: bool,
+
+    /// Bit 14 is reserved.
+    #[cfg_attr(feature = "deku", deku(bits = 1, assert = "*reserved_14 == false"))]
+    reserved_14: bool,
+
+    #[cfg_attr(feature = "deku", deku(bits = 1))]
+    journaled: bool,
+    #[cfg_attr(feature = "deku", deku(bits = 1))]
+    catalog_node_ids_reused: bool,
+    #[cfg_attr(feature = "deku", deku(bits = 1))]
+    boot_volume_inconsistent: bool,
+    #[cfg_attr(feature = "deku", deku(bits = 1))]
+    no_cache_required: bool,
+    #[cfg_attr(feature = "deku", deku(bits = 1))]
+    spared_blocks: bool,
+    #[cfg_attr(feature = "deku", deku(bits = 1))]
+    unmounted: bool,
+    #[cfg_attr(feature = "deku", deku(bits = 1))]
+    hardware_lock: bool,
+
+    // Bits 0-6 are reserved.
+    #[cfg_attr(feature = "deku", deku(bits = 1, assert = "*reserved_6 == false"))]
+    reserved_6: bool,
+    #[cfg_attr(feature = "deku", deku(bits = 1, assert = "*reserved_5 == false"))]
+    reserved_5: bool,
+    #[cfg_attr(feature = "deku", deku(bits = 1, assert = "*reserved_4 == false"))]
+    reserved_4: bool,
+    #[cfg_attr(feature = "deku", deku(bits = 1, assert = "*reserved_3 == false"))]
+    reserved_3: bool,
+    #[cfg_attr(feature = "deku", deku(bits = 1, assert = "*reserved_2 == false"))]
+    reserved_2: bool,
+    #[cfg_attr(feature = "deku", deku(bits = 1, assert = "*reserved_1 == false"))]
+    reserved_1: bool,
+    #[cfg_attr(feature = "deku", deku(bits = 1, assert = "*reserved_0 == false"))]
+    reserved_0: bool,
+}
+
+#[derive(Debug)]
+#[cfg(not(feature = "deku"))]
+struct VolumeAttribute {
+    /// Bits 0-6 are reserved.
+    reserved_0: bool,
+    reserved_1: bool,
+    reserved_2: bool,
+    reserved_3: bool,
+    reserved_4: bool,
+    reserved_5: bool,
+    reserved_6: bool,
+
+    hardware_lock: bool,
+    unmounted: bool,
+    spared_blocks: bool,
+    no_cache_required: bool,
+    boot_volume_inconsistent: bool,
+    catalog_node_ids_reused: bool,
+    journaled: bool,
+
+    /// Bit 14 is reserved.
+    reserved_14: bool,
+
+    software_lock: bool,
+
+    // Bits 16-31 are reserved.
+    reserved_16: bool,
+    reserved_17: bool,
+    reserved_18: bool,
+    reserved_19: bool,
+    reserved_20: bool,
+    reserved_21: bool,
+    reserved_22: bool,
+    reserved_23: bool,
+    reserved_24: bool,
+    reserved_25: bool,
+    reserved_26: bool,
+    reserved_27: bool,
+    reserved_28: bool,
+    reserved_29: bool,
+    reserved_30: bool,
+    reserved_31: bool,
+}
+
 /// Volume Header, stored at 1024 bytes from start, and secondary header at 512
 /// bytes from the end. Defined as `struct HFSPlusVolumeHeader` in
 /// TN1150 > Volume Header.
@@ -242,7 +368,8 @@ enum VolumeAttributeBit {
     deku(endian = "endian", ctx = "endian: Endian", ctx_default = "Endian::Big")
 )]
 pub struct VolumeHeader {
-    pub signature: u16,
+    #[cfg_attr(feature = "deku", deku(assert = "*signature == VOLUME_SIGNATURE"))]
+    pub signature: [u8; 2],
     pub version: u16,
     pub attributes: u32,
     pub last_mounted_version: u32,
@@ -276,6 +403,10 @@ pub struct VolumeHeader {
     pub catalog_file: ForkData,
     pub attributes_file: ForkData,
     pub startup_file: ForkData,
+}
+
+impl VolumeHeader {
+    pub const PACKED_SIZE: usize = 512;
 }
 
 /// Catalog Node ID or CNID identifies a B-tree file.
@@ -388,7 +519,7 @@ pub struct BTreeAllocationMapRecord {
 
 impl BTreeAllocationMapRecord {
     // Algorithm taken from IsAllocationBlockUsed in  TN1150 > Allocation File
-    fn isBlockUsed(&self, allocation_block: u32) -> bool {
+    fn is_block_used(&self, allocation_block: u32) -> bool {
         // TODO handle overflow?
         let offset = allocation_block / 8;
         let this_byte = self.bitmap[offset as usize];
@@ -840,17 +971,53 @@ struct AttributeExtents {
     extents: ExtentRecord,
 }
 
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
+#[derive(Debug)]
+#[cfg_attr(feature = "deku", derive(DekuRead))]
+#[cfg_attr(feature = "deku", deku(endian = "big"))]
+pub struct JournalInfoBlock {
+    pub flags: JournalInfoBlockFlags,
+    pub device_signature: [u32; 8],
+    pub offset: u64,
+    pub size: u64,
+    pub reserved: [u32; 32],
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+impl JournalInfoBlock {
+    pub const PACKED_SIZE: usize = JournalInfoBlockFlags::PACKED_SIZE
+    + 8 * 4 // Device Signature
+    + 8 // Offset
+    + 8 // Size
+    + 32 * 4; // Reserved bytes
+}
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+// Flags are defined in reverse order to handle deku#134
+// see https://github.com/sharksforarms/deku/issues/134
+#[derive(Debug)]
+#[cfg_attr(feature = "deku", derive(DekuRead))]
+#[cfg_attr(
+    feature = "deku",
+    deku(endian = "endian", ctx = "endian: Endian", ctx_default = "Endian::Big")
+)]
+pub struct JournalInfoBlockFlags {
+    #[cfg_attr(feature = "deku", deku(bits = 29, assert = "*reserved == 0"))]
+    pub reserved: u32,
+    #[cfg_attr(feature = "deku", deku(bits = 1))]
+    pub needs_init: bool,
+    #[cfg_attr(feature = "deku", deku(bits = 1))]
+    pub on_other_device: bool,
+    #[cfg_attr(feature = "deku", deku(bits = 1))]
+    pub in_fs: bool,
+}
+
+#[derive(Debug)]
+#[cfg(not(feature = "deku"))]
+pub struct JournalInfoBlockFlags {
+    pub in_fs: bool,
+    pub on_other_device: bool,
+    pub needs_init: bool,
+    pub reserved: u32,
+}
+
+impl JournalInfoBlockFlags {
+    pub const PACKED_SIZE: usize = 4;
 }
