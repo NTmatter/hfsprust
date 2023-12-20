@@ -1,5 +1,7 @@
 # HFSPrust
-Tools for reading (or attempting to read) damaged HFS+ volume images.
+Tools for reading (or attempting to read) HFS+ volumes.
+
+Examples include basic tools for reading low-level structures and extracting data where possible.
 
 > **WARNING**: Only operates on raw disk images. Does not recover damaged disks, raid arrays, or other damaged sources.
 
