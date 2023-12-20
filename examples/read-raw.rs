@@ -50,10 +50,24 @@ fn main() -> Result<(), io::Error> {
 
     // Transmute a copy, just to show off endianness issues.
     let transmuted: HFSPlusVolumeHeader = unsafe { std::mem::transmute(buf) };
-
     if volume_header.signature != transmuted.signature {
         eprintln!("Transmuted signature does not match endian-swapped signature.");
     }
+
+    println!("Sucessfully parsed volume header.");
+    let block_size = volume_header.blockSize as usize;
+    println!("Block Size: {}", block_size);
+    println!("Catalog File:");
+
+    // This starts to complain about unaligned accesses due to the packed
+    // representation. The catalogFile and its totalBlocks/logicalSie fields are
+    // also unaligned, requiring a lot of temp copies to be floating around.
+    let catalog_file = volume_header.catalogFile;
+    let total_blocks = catalog_file.totalBlocks;
+    let logical_size = catalog_file.logicalSize;
+    println!("\tblocks: {}", total_blocks);
+    println!("\tlogical_size: {}", logical_size);
+    println!();
 
     Ok(())
 }
