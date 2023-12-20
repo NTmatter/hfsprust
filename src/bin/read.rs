@@ -6,6 +6,8 @@ use itertools::Itertools;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fs::File;
+use std::io::BufReader;
+use std::io::BufWriter;
 use std::io::{self, Cursor, Read, Seek, SeekFrom, Write};
 use std::os::unix::prelude::FileExt;
 use std::path::PathBuf;
@@ -498,8 +500,17 @@ fn copy_file_data_from_extents(
         return Ok((logical_size, hash));
     }
 
-    // Memmap would be more efficient here. Vectored IO would be the next most efficient.
+    // Memmap would be more efficient here. Vectored IO with mmap slices would be optimal.
+    // Leveraging io_uring would be supreme.
+    //
     // Let's go with boring and correct for now, and build accelerated paths later.
+    //
+    // Use a 1MiB bufferinstead of the default 8kiB, as we'll be copying
+    // large files.
+
+    let mut volume = BufReader::with_capacity(1048576, volume);
+    let mut output = BufWriter::with_capacity(1048576, output);
+
     file_record
         .data_fork
         .extents
