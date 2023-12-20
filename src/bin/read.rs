@@ -6,7 +6,9 @@ use itertools::Itertools;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fs::File;
-use std::io::{self, Cursor, Read, Seek, SeekFrom, Write};
+use std::io::BufReader;
+use std::io::BufWriter;
+use std::io::{self, Cursor, Error, Read, Seek, SeekFrom, Write};
 use std::os::unix::prelude::FileExt;
 use std::path::PathBuf;
 use std::{env, fs};
@@ -23,6 +25,7 @@ fn main() -> Result<(), io::Error> {
 
     let volume_file_path = args.get(1).expect("Path to Image File as first argument");
     println!("Operating on {volume_file_path}");
+
     let output_root_path = args
         .get(2)
         .expect("Path to output directory as second argument");
@@ -45,8 +48,7 @@ fn main() -> Result<(), io::Error> {
     }
 
     // Read volume header structure.
-    const VOLUME_HEADER_LENGTH: usize = 512;
-    let mut buf = [0u8; VOLUME_HEADER_LENGTH];
+    let mut buf = [0u8; VolumeHeader::PACKED_SIZE];
     volume_file
         .read_exact_at(&mut buf, 1024)
         .expect("Read volume header");
@@ -124,7 +126,19 @@ fn main() -> Result<(), io::Error> {
     if !output_root.exists() {
         fs::create_dir(&output_root)?;
     }
-    assert!(output_root.is_dir()); // TODO return proper error if not writing to a directory
+
+    if !output_root.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Could not create output directory",
+        ));
+    }
+    if !output_root.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Output is not a directory.",
+        ));
+    }
     map.values()
         .filter(|record| matches!(record, CatalogLeafRecord::File(_)))
         .try_for_each(|record| {
