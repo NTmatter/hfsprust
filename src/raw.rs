@@ -38,7 +38,8 @@ pub struct HFSPlusBSDInfo {
     pub adminFlags: u8,
     pub ownerFlags: u8,
     pub fileMode: u16,
-    /// Originally a union for iNode, linkCount, rawDevice.
+    /// Originally an HFSPlusBSDInfo_special union for iNode, linkCount, rawDevice.
+    /// This is left as a `u32` to avoid using `unsafe` on the union.
     pub special: u32,
 }
 
@@ -85,6 +86,7 @@ pub enum FileMode {
     S_IFWHT = 0o160000,
 }
 
+#[derive(Debug, Copy, Clone)]
 #[cfg_attr(feature = "deku", derive(DekuRead))]
 #[repr(C, packed)]
 pub struct HFSPlusForkData {
@@ -99,6 +101,7 @@ pub struct HFSPlusForkData {
 
 type HFSPlusExtentRecord = [HFSPlusExtentDescriptor; 8];
 
+#[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "deku", derive(DekuRead))]
 #[cfg_attr(feature = "deku", deku(endian = "big"))]
 #[repr(C, packed)]
@@ -109,6 +112,7 @@ pub struct HFSPlusExtentDescriptor {
 
 pub type HFSCatalogNodeID = u32;
 
+#[derive(Debug)]
 #[cfg_attr(feature = "deku", derive(DekuRead))]
 #[repr(C, packed)]
 pub struct HFSPlusVolumeHeader {
