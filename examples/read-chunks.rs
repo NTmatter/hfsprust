@@ -44,8 +44,9 @@ fn main() -> Result<(), std::io::Error> {
         .advise(Advice::Sequential)
         .expect("Failed to advise sequential access");
 
-    let total_size = 12usize;
-    let slices = [
+    // When does the actual read occur?
+    let total_size = 12;
+    let slices = vec![
         IoSlice::new(&volume_mmap[0..4]),
         IoSlice::new(&volume_mmap[4..8]),
         IoSlice::new(&volume_mmap[8..12]),
@@ -55,7 +56,7 @@ fn main() -> Result<(), std::io::Error> {
     let mut output = Cursor::new(&mut output);
 
     let mut written_bytes = 0;
-    loop {
+    while written_bytes < total_size {
         let res = output.write_vectored(&slices);
         match res {
             Ok(0) => {
@@ -67,10 +68,6 @@ fn main() -> Result<(), std::io::Error> {
                 written_bytes += n;
             }
             Err(err) => eprintln!("Failed to write bytes: {err}"),
-        }
-
-        if written_bytes >= total_size {
-            break;
         }
     }
 

@@ -3,11 +3,15 @@ use deku::DekuContainerRead;
 use deku::DekuRead;
 use hfsprust::*;
 use itertools::Itertools;
+use memmap2::UncheckedAdvice;
+use memmap2::{Advice, MmapOptions};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::io::BufWriter;
+use std::io::ErrorKind;
+use std::io::IoSlice;
 use std::io::{self, Cursor, Read, Seek, SeekFrom, Write};
 use std::os::unix::prelude::FileExt;
 use std::path::PathBuf;
@@ -126,7 +130,15 @@ fn main() -> Result<(), io::Error> {
     if !output_root.exists() {
         fs::create_dir(&output_root)?;
     }
-    assert!(output_root.is_dir()); // TODO return proper error if not writing to a directory
+
+    if !output_root.is_dir() {
+        return Err(io::Error::new(
+            ErrorKind::InvalidInput,
+            "Output path is not a directory",
+        ));
+    }
+
+    // This could probably be parallelized
     map.values()
         .filter(|record| matches!(record, CatalogLeafRecord::File(_)))
         .try_for_each(|record| {
@@ -136,7 +148,7 @@ fn main() -> Result<(), io::Error> {
 
                 // Skip HFS Private Data and various Metadata
                 if original_file_path.contains(&String::from("\0\0\0\0HFS+ Private Data"))
-                    || original_file_path.contains(&String::from(".DS_Store"))
+                    // || original_file_path.contains(&String::from(".DS_Store"))
                     || original_file_path.contains(&String::from(".Spotlight-V100"))
                     || original_file_path.contains(&String::from(".journal_info_block"))
                     || original_file_path.contains(&String::from(".journal"))
@@ -164,8 +176,8 @@ fn main() -> Result<(), io::Error> {
                     .create_new(true)
                     .open(output_path)?;
 
-                copy_file_data_from_extents(
-                    &mut volume_file,
+                copy_file_mmap(
+                    &volume_file,
                     block_size as u16,
                     file_record,
                     Vec::new(),
@@ -483,11 +495,78 @@ fn assemble_extents(
     Ok(data)
 }
 
+fn copy_file_mmap(
+    volume: &File,
+    block_size: u16,
+    file_record: &CatalogFile,
+    overflow_extents: Vec<ExtentDescriptor>,
+    output: &mut impl Write,
+) -> Result<(u64, String), io::Error> {
+    let logical_size = file_record.data_fork.logical_size;
+    let mmap = unsafe {
+        MmapOptions::new()
+            // .populate() // How much does this pre-populate?
+            .map_copy_read_only(volume)
+            .expect("foo")
+    };
+
+    let mut hasher = Sha256::new();
+
+    if logical_size > 0 {
+        // Build a list of ranges for vectored write
+        let mut bytes_to_read = logical_size as usize;
+        file_record
+            .data_fork
+            .extents
+            .iter()
+            .chain(overflow_extents.iter())
+            .try_for_each(|extent| {
+                let start_byte = extent.start_block as usize * block_size as usize;
+                let length = extent.block_count as usize * block_size as usize;
+                let length = if length > bytes_to_read {
+                    bytes_to_read
+                } else {
+                    length
+                };
+                bytes_to_read = bytes_to_read
+                    .checked_sub(length)
+                    .expect("Do not read more than logical size");
+
+                let end_byte = start_byte + length;
+
+                // Suggest aggressive readahead and discard for anything larger than a few KB
+                #[cfg(unix)]
+                if length > 16_384 {
+                    let _res = mmap.advise_range(Advice::Sequential, start_byte, length);
+                }
+
+                let slice = &mmap[start_byte..end_byte];
+                hasher.update(&slice);
+                let res = output.write_all(&slice);
+
+                // Mark bytes as no-longer needed
+                #[cfg(unix)]
+                unsafe {
+                    let _res =
+                        mmap.unchecked_advise_range(UncheckedAdvice::DontNeed, start_byte, length);
+                };
+
+                res
+            })
+            .expect("Write all extents");
+
+        assert_eq!(bytes_to_read, 0, "Must consume entire logical size of file");
+    }
+
+    let hash = format!("{:x}", hasher.finalize());
+    Ok((logical_size, hash))
+}
+
 fn copy_file_data_from_extents(
     volume: &mut (impl Read + Seek),
     block_size: u16,
     file_record: &CatalogFile,
-    overflow_extents: Vec<ExtentDescriptor>, // FIXME Handle overflow extents. Just chain iterators? Better to supply a list of extents
+    overflow_extents: Vec<ExtentDescriptor>,
     output: &mut impl Write,
 ) -> Result<(u64, String), io::Error> {
     let logical_size = file_record.data_fork.logical_size;
@@ -499,14 +578,6 @@ fn copy_file_data_from_extents(
         let hash = format!("{:x}", hasher.finalize());
         return Ok((logical_size, hash));
     }
-
-    // Memmap would be more efficient here. Vectored IO with mmap slices would be optimal.
-    // Leveraging io_uring would be supreme.
-    //
-    // Let's go with boring and correct for now, and build accelerated paths later.
-    //
-    // Use a 1MiB bufferinstead of the default 8kiB, as we'll be copying
-    // large files.
 
     let mut volume = BufReader::with_capacity(1048576, volume);
     let mut output = BufWriter::with_capacity(1048576, output);
@@ -540,4 +611,69 @@ fn copy_file_data_from_extents(
 
     let hash = format!("{:x}", hasher.finalize());
     Ok((logical_size, hash))
+}
+
+fn copy_file_vectored(
+    volume: &File,
+    block_size: u16,
+    file_record: &CatalogFile,
+    overflow_extents: Vec<ExtentDescriptor>,
+    output: &mut impl Write,
+) -> Result<u64, io::Error> {
+    let logical_size = file_record.data_fork.logical_size;
+    let mmap = unsafe {
+        MmapOptions::new()
+            .populate()
+            .map_copy_read_only(volume)
+            .expect("foo")
+    };
+
+    // Build a list of ranges for vectored write
+    let mut bytes_to_read = logical_size as usize;
+    let extents: Vec<IoSlice> = file_record
+        .data_fork
+        .extents
+        .iter()
+        .chain(overflow_extents.iter())
+        .map(|extent| {
+            let start_byte = extent.start_block as usize * block_size as usize;
+            let length = extent.block_count as usize * block_size as usize;
+            let length = if length > bytes_to_read {
+                bytes_to_read
+            } else {
+                length
+            };
+            bytes_to_read = bytes_to_read
+                .checked_sub(length)
+                .expect("Do not read more than logical size");
+
+            let end_byte = start_byte + length;
+
+            #[cfg(unix)]
+            let _res = mmap.advise_range(Advice::Sequential, start_byte, length);
+            let slice = &mmap[start_byte..end_byte];
+            IoSlice::new(slice)
+        })
+        .collect();
+
+    assert_eq!(bytes_to_read, 0, "Must consume entire logical size of file");
+
+    // Does this actually handle partial writes correctly?
+    let mut written = 0;
+    while written < logical_size {
+        match output.write_vectored(&extents) {
+            Ok(0) => {
+                break;
+            }
+            Ok(n) => {
+                written += n as u64;
+            }
+            Err(err) => {
+                eprintln!("Failed to write: {err}");
+                return Err(err);
+            }
+        }
+    }
+
+    Ok(logical_size)
 }
