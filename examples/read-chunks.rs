@@ -10,7 +10,7 @@ use memmap2::{Advice, MmapOptions};
 use std::collections::BTreeMap;
 use std::env;
 use std::fs::File;
-use std::io::{self, Error, ErrorKind, IoSlice, Read, Write};
+use std::io::{self, Cursor, Error, ErrorKind, IoSlice, Read, Write};
 
 fn main() -> Result<(), std::io::Error> {
     let args: Vec<String> = env::args().collect();
@@ -33,16 +33,46 @@ fn main() -> Result<(), std::io::Error> {
 
     // Surprisingly, a read-only map is safe! But is it usable?
     // I think I might have to do an unsafe map, like in the examples.
-    let volume_mmap = MmapOptions::new()
-        .populate()
-        .map_raw_read_only(&volume_file)
-        .expect("Read-only mmap of volume");
+    let volume_mmap = unsafe {
+        MmapOptions::new()
+            .populate()
+            .map_copy_read_only(&volume_file)
+            .expect("Read-only mmap of volume")
+    };
 
     volume_mmap
         .advise(Advice::Sequential)
         .expect("Failed to advise sequential access");
 
-    let slice = &volume_mmap[..];
-    dbg!(slice);
+    let total_size = 12usize;
+    let slices = [
+        IoSlice::new(&volume_mmap[0..4]),
+        IoSlice::new(&volume_mmap[4..8]),
+        IoSlice::new(&volume_mmap[8..12]),
+    ];
+
+    let mut output = Vec::<u8>::new();
+    let mut output = Cursor::new(&mut output);
+
+    let mut written_bytes = 0;
+    loop {
+        let res = output.write_vectored(&slices);
+        match res {
+            Ok(0) => {
+                println!("finished writing");
+                break;
+            }
+            Ok(n) => {
+                println!("Wrote {n} bytes");
+                written_bytes += n;
+            }
+            Err(err) => eprintln!("Failed to write bytes: {err}"),
+        }
+
+        if written_bytes >= total_size {
+            break;
+        }
+    }
+
     Ok(())
 }
