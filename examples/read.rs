@@ -445,9 +445,12 @@ fn parse_catalog_leaf(record_bytes: &Vec<u8>) -> Result<(Vec<u8>, CatalogLeafRec
     // Peek at record kind
     let buf = vec![rest[0], rest[1]];
     let buf = BitSlice::from_slice(&buf);
-    let (rest, kind) = CatalogFileDataType::read(&buf, ())?;
+    let (_rest, kind) = CatalogFileDataType::read(&buf, ())?;
+
+    let rest = BitSlice::from_slice(&rest);
 
     // Parse payload
+    // TODO Let Deku determine the variant type from the leading two bytes.
     let record = match kind {
         CatalogFileDataType::kHFSPlusFolderRecord => {
             let (_rest, folder) = CatalogFolder::read(&rest, ())?;
