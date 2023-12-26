@@ -34,15 +34,21 @@ fn main() -> Result<(), io::Error> {
         .expect("Path to output directory as second argument");
     println!("Writing to {output_root_path}");
 
-    let mut volume_file = File::options()
+    let mut volume_image = File::options()
         .read(true)
         .open(volume_file_path)
         .expect("Open volume image for reading");
 
+    let volume_image_metadata = volume_image
+        .metadata()
+        .expect("Retrieve volume image file metadata");
+
+    let volume_image_size = volume_image_metadata.len();
+
     // Leading zeroes at start of file
     const PREAMBLE_LENGTH: usize = 1024;
     let mut buf = [0u8; PREAMBLE_LENGTH];
-    volume_file
+    volume_image
         .read_exact_at(&mut buf, 0)
         .expect("1kB of zeroes present at start of volume");
 
@@ -53,7 +59,7 @@ fn main() -> Result<(), io::Error> {
     // Read volume header structure.
     const VOLUME_HEADER_LENGTH: usize = 512;
     let mut buf = [0u8; VOLUME_HEADER_LENGTH];
-    volume_file
+    volume_image
         .read_exact_at(&mut buf, 1024)
         .expect("Read volume header");
 
@@ -73,7 +79,7 @@ fn main() -> Result<(), io::Error> {
     println!();
 
     let catalog_extents = assemble_extents(
-        &mut volume_file,
+        &mut volume_image,
         &volume_header.catalog_file,
         volume_header.block_size as usize,
     )?;
@@ -157,10 +163,22 @@ fn main() -> Result<(), io::Error> {
                     println!("Skipping {original_file_path:?}");
                     return Ok(());
                 }
+
+                // XXX Working with a truncated image, filter out any files with unavailable extents.
+                for extent in &file_record.data_fork.extents {
+                    let end_byte =
+                        (extent.start_block + extent.block_count) as u64 * block_size as u64;
+                    if end_byte > volume_image_size {
+                        println!("Out of bounds {original_file_path:?}");
+                        return Ok(());
+                    }
+                }
+
                 println!(
                     "Processing {original_file_path:?} size={}",
                     file_record.data_fork.logical_size
                 );
+
                 // Create parent directories for output file if they do not exist
                 let mut output_path = output_root.clone();
                 original_file_path
@@ -176,13 +194,17 @@ fn main() -> Result<(), io::Error> {
                     .create_new(true)
                     .open(output_path)?;
 
-                copy_file_mmap(
-                    &volume_file,
+                let res = copy_file_mmap(
+                    &volume_image,
                     block_size as u16,
                     file_record,
                     Vec::new(),
                     &mut output_file,
                 )?;
+                println!(
+                    "Done {original_file_path:?} bytes={} cksum={}",
+                    res.0, res.1
+                )
             }
             Ok::<(), io::Error>(())
         })?;
@@ -305,8 +327,8 @@ fn read_btree_header(
     // The Map Record consumes all space until the record offsets at the end of the node.
     // This can be derived from the node size (specified in the node header) and the size
     // of all other structures (totals 256 bytes).
-    let size_of_structures = 256;
-    let map_record_size = btree_header.node_size - size_of_structures;
+    const MAP_STRUCTURE_SIZE: u16 = 256;
+    let map_record_size = btree_header.node_size - MAP_STRUCTURE_SIZE;
     let mut buf = vec![0u8; map_record_size as usize];
     stream.read_exact(&mut buf)?;
 
@@ -356,47 +378,37 @@ fn read_btree_leaves(
         //     records.len()
         // );
 
-        // WIP: Focus on Leaf Nodes
+        // WIP: Focus on Leaf Nodes, as we're not trusting the on-disk b-tree for lookup.
         if node_header.kind != BTreeNodeKind::kBTLeafNode {
             continue;
         }
 
-        for record in records {
-            let (key, leaf_record) = parse_catalog_leaf(&record)?;
-            // Enumerate file extents and usage.
-            // if let CatalogLeafRecord::File(file) = &leaf_record {
-            //     let active_extents = file
-            //         .data_fork
-            //         .extents
-            //         .iter()
-            //         .filter(|extent| extent.block_count > 0)
-            //         .count();
-            //     println!(
-            //         "\t\t{} bytes in {} blocks across {} extents",
-            //         file.data_fork.logical_size, file.data_fork.total_blocks, active_extents
-            //     );
-            // };
-
+        records.iter().for_each(|record_bytes| {
+            let (key, leaf_record) =
+                parse_catalog_leaf(&record_bytes).expect("Parse catalog record");
             btree.insert(key, leaf_record);
-        }
+        });
     }
 
     Ok(btree)
 }
 
-fn parse_catalog_leaf(record: &Vec<u8>) -> Result<(Vec<u8>, CatalogLeafRecord), io::Error> {
-    let mut cur = Cursor::new(record);
+fn parse_catalog_leaf(record_bytes: &Vec<u8>) -> Result<(Vec<u8>, CatalogLeafRecord), io::Error> {
+    let mut cur = Cursor::new(record_bytes);
 
     // Are we actually trying to read a Catalog File Key here?
 
     // Key Length: u16, as per TN1150 > Keyed Records. Might vary for non-leaves.
     let mut buf = [0u8; 2];
-    cur.read_exact(&mut buf)?;
+    cur.read_exact(&mut buf)
+        .expect("Read length of catalog file key");
     let key_length = u16::from_be_bytes(buf);
 
     // Key Data (opaque)
     let mut key: BTreeKey = vec![0u8; key_length as usize];
-    cur.read_exact(&mut key)?;
+    cur.read_exact(&mut key).expect("Read raw catalog file key");
+
+    // Historical: Try to parse the key, as it actually has some structure.
     //
     // let mut key_cur = Cursor::new(&key);
     //
@@ -420,11 +432,11 @@ fn parse_catalog_leaf(record: &Vec<u8>) -> Result<(Vec<u8>, CatalogLeafRecord), 
     // }
     // let name = String::from_utf16_lossy(&name);
 
-    // Alignment
-    if key_length % 2 == 1 {
-        eprintln!("Found odd key length! Consume padding.");
+    // Consume alignment/padding bytes if key length is odd.
+    if key_length % 2 != 0 {
         // Consider: cur.consume(1);
-        cur.read_exact(&mut [0u8; 1])?;
+        cur.read_exact(&mut [0u8; 1])
+            .expect("Read padding byte from catalog leaf key");
     }
 
     let mut rest = Vec::<u8>::new();
@@ -450,7 +462,8 @@ fn parse_catalog_leaf(record: &Vec<u8>) -> Result<(Vec<u8>, CatalogLeafRecord), 
             CatalogLeafRecord::FolderThread(folder_thread)
         }
         CatalogFileDataType::kHFSPlusFileThreadRecord => {
-            let (_rest, file_thread) = CatalogThread::read(&rest, ())?;
+            let (_rest, file_thread) =
+                CatalogThread::read(&rest, ()).expect("Parse File Thread Record");
             CatalogLeafRecord::FileThread(file_thread)
         }
     };
