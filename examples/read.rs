@@ -408,30 +408,6 @@ fn parse_catalog_leaf(record_bytes: &Vec<u8>) -> Result<(Vec<u8>, CatalogLeafRec
     let mut key: BTreeKey = vec![0u8; key_length as usize];
     cur.read_exact(&mut key).expect("Read raw catalog file key");
 
-    // Historical: Try to parse the key, as it actually has some structure.
-    //
-    // let mut key_cur = Cursor::new(&key);
-    //
-    // // Key: Parent CNID
-    // let mut buf = [0u8; 4];
-    // key_cur.read_exact(&mut buf)?;
-    // let parent_cnid = u32::from_be_bytes(buf);
-    //
-    // // Key: String Length
-    // let mut buf = [0u8; 2];
-    // key_cur.read_exact(&mut buf)?;
-    // let char_count = u16::from_be_bytes(buf) as usize;
-    //
-    // // Key: File Name
-    // let mut name = Vec::<u16>::new();
-    // for _ in 0..char_count {
-    //     let mut buf = [0u8; 2];
-    //     key_cur.read_exact(&mut buf)?;
-    //     let char = u16::from_be_bytes(buf);
-    //     name.push(char);
-    // }
-    // let name = String::from_utf16_lossy(&name);
-
     // Consume alignment/padding bytes if key length is odd.
     if key_length % 2 != 0 {
         // Consider: cur.consume(1);
@@ -441,27 +417,27 @@ fn parse_catalog_leaf(record_bytes: &Vec<u8>) -> Result<(Vec<u8>, CatalogLeafRec
 
     let mut rest = Vec::<u8>::new();
     cur.read_to_end(&mut rest)?;
+    let rest = BitSlice::from_slice(&rest);
 
     // Peek at record kind
-    let buf = vec![rest[0], rest[1]];
-    let buf = BitSlice::from_slice(&buf);
-    let (_rest, kind) = CatalogFileDataType::read(&buf, ())?;
-
-    let rest = BitSlice::from_slice(&rest);
+    let buf = BitSlice::from_slice(&rest[0..=1]);
+    let (_rest, kind) =
+        CatalogFileDataType::read(&buf, ()).expect("Known Catalog File Datatype ID");
 
     // Parse payload
     // TODO Let Deku determine the variant type from the leading two bytes.
     let record = match kind {
         CatalogFileDataType::kHFSPlusFolderRecord => {
-            let (_rest, folder) = CatalogFolder::read(&rest, ())?;
+            let (_rest, folder) = CatalogFolder::read(&rest, ()).expect("Parse Folder Record");
             CatalogLeafRecord::Folder(folder)
         }
         CatalogFileDataType::kHFSPlusFileRecord => {
-            let (_rest, file) = CatalogFile::read(&rest, ())?;
+            let (_rest, file) = CatalogFile::read(&rest, ()).expect("Parse file Record");
             CatalogLeafRecord::File(file)
         }
         CatalogFileDataType::kHFSPlusFolderThreadRecord => {
-            let (_rest, folder_thread) = CatalogThread::read(&rest, ())?;
+            let (_rest, folder_thread) =
+                CatalogThread::read(&rest, ()).expect("Parse Folder Thread Record");
             CatalogLeafRecord::FolderThread(folder_thread)
         }
         CatalogFileDataType::kHFSPlusFileThreadRecord => {
