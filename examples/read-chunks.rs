@@ -7,12 +7,11 @@
 //! extents can be extremely large.
 
 use memmap2::{Advice, MmapOptions};
-use std::collections::BTreeMap;
 use std::env;
 use std::fs::File;
-use std::io::{self, Cursor, Error, ErrorKind, IoSlice, Read, Write};
+use std::io::{self, Cursor, IoSlice, Write};
 
-fn main() -> Result<(), std::io::Error> {
+fn main() -> Result<(), io::Error> {
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
         eprintln!("usage: journal-info /path/to/file.img");

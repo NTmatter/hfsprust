@@ -7,8 +7,10 @@ pub mod raw;
 use deku::ctx::Endian;
 #[cfg(feature = "deku")]
 use deku::prelude::*;
+use std::fmt::{Debug, Formatter};
 use std::io;
 use std::io::{Cursor, Read};
+use std::num::NonZeroU32;
 
 /// Unicode 2.0 String. Defined in TN1150 > HFS Plus Names.
 /// Strings are stored fully-decomposed in canonical order.
@@ -30,6 +32,26 @@ pub struct HFSUniStr255 {
     pub unicode: Vec<u16>,
 }
 
+impl Debug for HFSUniStr255 {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        #[cfg(feature = "deku")]
+        return write!(
+            f,
+            "{}: {}",
+            self.unicode.len(),
+            String::from_utf16_lossy(self.unicode.as_slice())
+        );
+
+        #[cfg(not(feature = "deku"))]
+        return write!(
+            f,
+            "{}: {}",
+            self.length,
+            String::from_utf16_lossy(self.unicode.as_slice())
+        );
+    }
+}
+
 impl Into<String> for HFSUniStr255 {
     fn into(self) -> String {
         String::from_utf16_lossy(self.unicode.as_slice())
@@ -42,49 +64,100 @@ impl Into<String> for HFSUniStr255 {
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug)]
 #[cfg_attr(feature = "deku", derive(DekuRead))]
-#[cfg_attr(feature = "deku", deku(endian = "big", type = "u32"))]
+#[cfg_attr(
+    feature = "deku",
+    deku(
+        endian = "endian",
+        ctx = "endian: Endian",
+        ctx_default = "Endian::Big",
+        type = "u32",
+    )
+)]
 pub enum TextEncoding {
+    #[cfg_attr(feature = "deku", deku(id = "0"))]
     MacRoman = 0,
+    #[cfg_attr(feature = "deku", deku(id = "1"))]
     MacJapanese = 1,
+    #[cfg_attr(feature = "deku", deku(id = "2"))]
     MacChineseTriad = 2,
+    #[cfg_attr(feature = "deku", deku(id = "3"))]
     MacKorean = 3,
+    #[cfg_attr(feature = "deku", deku(id = "4"))]
     MacArabic = 4,
+    #[cfg_attr(feature = "deku", deku(id = "5"))]
     MacHebrew = 5,
+    #[cfg_attr(feature = "deku", deku(id = "6"))]
     MacGreek = 6,
+    #[cfg_attr(feature = "deku", deku(id = "7"))]
     MacCyrillic = 7,
+    #[cfg_attr(feature = "deku", deku(id = "8"))]
     MacDevanagari = 8,
+    #[cfg_attr(feature = "deku", deku(id = "10"))]
     MacGurmukhi = 10,
+    #[cfg_attr(feature = "deku", deku(id = "11"))]
     MacGujarati = 11,
+    #[cfg_attr(feature = "deku", deku(id = "12"))]
     MacOriya = 12,
+    #[cfg_attr(feature = "deku", deku(id = "13"))]
     MacBengali = 13,
+    #[cfg_attr(feature = "deku", deku(id = "14"))]
     MacTamil = 14,
+    #[cfg_attr(feature = "deku", deku(id = "15"))]
     MacTelugu = 15,
+    #[cfg_attr(feature = "deku", deku(id = "16"))]
     MacKannada = 16,
+    #[cfg_attr(feature = "deku", deku(id = "17"))]
     MacMalayalam = 17,
+    #[cfg_attr(feature = "deku", deku(id = "18"))]
     MacSinhalese = 18,
+    #[cfg_attr(feature = "deku", deku(id = "19"))]
     MacBurmese = 19,
+    #[cfg_attr(feature = "deku", deku(id = "20"))]
     MacKhmer = 20,
+    #[cfg_attr(feature = "deku", deku(id = "21"))]
     MacThai = 21,
+    #[cfg_attr(feature = "deku", deku(id = "22"))]
     MacLaotian = 22,
+    #[cfg_attr(feature = "deku", deku(id = "23"))]
     MacGeorgian = 23,
+    #[cfg_attr(feature = "deku", deku(id = "24"))]
     MacArmenian = 24,
+    #[cfg_attr(feature = "deku", deku(id = "25"))]
     MacChineseSimp = 25,
+    #[cfg_attr(feature = "deku", deku(id = "26"))]
     MacTibetan = 26,
+    #[cfg_attr(feature = "deku", deku(id = "27"))]
     MacMongolian = 27,
+    #[cfg_attr(feature = "deku", deku(id = "28"))]
     MacEthiopic = 28,
+    #[cfg_attr(feature = "deku", deku(id = "29"))]
     MacCentralEurRoman = 29,
+    #[cfg_attr(feature = "deku", deku(id = "30"))]
     MacVietnamese = 30,
+    #[cfg_attr(feature = "deku", deku(id = "31"))]
     MacExtArabic = 31,
+    #[cfg_attr(feature = "deku", deku(id = "33"))]
     MacSymbol = 33,
+    #[cfg_attr(feature = "deku", deku(id = "34"))]
     MacDingbats = 34,
+    #[cfg_attr(feature = "deku", deku(id = "35"))]
     MacTurkish = 35,
+    #[cfg_attr(feature = "deku", deku(id = "36"))]
     MacCroatian = 36,
+    #[cfg_attr(feature = "deku", deku(id = "37"))]
     MacIcelandic = 37,
+    #[cfg_attr(feature = "deku", deku(id = "38"))]
     MacRomanian = 38,
+    #[cfg_attr(feature = "deku", deku(id = "49"))]
     MacFarsi = 49,
+    #[cfg_attr(feature = "deku", deku(id = "140"))]
     MacFarsi2 = 140,
+    #[cfg_attr(feature = "deku", deku(id = "48"))]
     MacUkrainian = 48,
+    #[cfg_attr(feature = "deku", deku(id = "152"))]
     MacUkrainian2 = 152,
+    #[deku(id_pat = "_")]
+    Unknown(NonZeroU32),
 }
 
 /// Dates are represented as seconds since Jan 1, 1904.
@@ -703,37 +776,86 @@ pub enum BTreeKeyCompareType {
 
 // TODO Map Record: Occupies remaining space in header node.
 
-/// BTree leaf node for Folders. Defined as `struct HFSPlusCatalogFolder`
-/// in TN1150 > Catalog Folder Records
 #[derive(Debug)]
 #[cfg_attr(feature = "deku", derive(DekuRead))]
 #[cfg_attr(
     feature = "deku",
-    deku(endian = "endian", ctx = "endian: Endian", ctx_default = "Endian::Big")
+    deku(
+        type = "u16",
+        endian = "endian",
+        ctx = "endian: Endian",
+        ctx_default = "Endian::Big",
+    )
 )]
-pub struct CatalogFolder {
-    /// Always CatalogFolderDataType::kHFSPlusFolderRecord
-    pub record_type: CatalogFileDataType,
-    pub flags: u16,
-    pub valence: u32,
-    pub folder_id: CatalogNodeId,
-    pub create_date: Date,
-    pub content_mod_date: Date,
-    pub attribute_mod_date: Date,
-    pub access_date: Date,
-    pub backup_date: Date,
-    pub permissions: BsdInfo,
-    pub user_info: FolderInfo,
-    pub finder_info: ExtendedFolderInfo,
-    pub text_encoding: u32, // TextEncoding,
-    pub reserved: u32,
-}
-
 pub enum CatalogLeafRecord {
-    Folder(CatalogFolder),
-    File(CatalogFile),
-    FolderThread(CatalogThread),
-    FileThread(CatalogThread),
+    /// BTree leaf node for Folders. Defined as `struct HFSPlusCatalogFolder`
+    /// in TN1150 > Catalog Folder Records
+    // CatalogFileDataType::kHFSPlusFolderRecord
+    #[cfg_attr(feature = "deku", deku(id_pat = "0x0001"))]
+    CatalogFolder {
+        #[cfg_attr(
+            feature = "deku",
+            deku(assert_eq = "CatalogFileDataType::kHFSPlusFolderRecord")
+        )]
+        record_type: CatalogFileDataType, // record_type
+        flags: u16,
+        valence: u32,
+        folder_id: CatalogNodeId,
+        create_date: Date,
+        content_mod_date: Date,
+        attribute_mod_date: Date,
+        access_date: Date,
+        backup_date: Date,
+        permissions: BsdInfo,
+        user_info: FolderInfo,
+        finder_info: ExtendedFolderInfo,
+        text_encoding: TextEncoding,
+        reserved: u32,
+    },
+    /// BTree leaf node for Files. Defined as `struct HFSPlusCatalogFile` in
+    /// TN1150 > Catalog File Records
+    #[cfg_attr(feature = "deku", deku(id_pat = "0x0002"))]
+    CatalogFile {
+        #[cfg_attr(
+            feature = "deku",
+            deku(assert_eq = "CatalogFileDataType::kHFSPlusFileRecord")
+        )]
+        record_type: CatalogFileDataType,
+        flags: u16,
+        reserved_1: u32,
+        file_id: CatalogNodeId,
+        create_date: Date,
+        content_mod_date: Date,
+        attribute_mod_date: Date,
+        access_date: Date,
+        backup_date: Date,
+        permissions: BsdInfo,
+        user_info: FileInfo,
+        finder_info: ExtendedFileInfo,
+        text_encoding: TextEncoding,
+        reserved_2: u32,
+
+        data_fork: ForkData,
+        resource_fork: ForkData,
+    },
+    /// BTree link to CNID. Defined as `struct HFSPlusCatalogThread` in
+    /// TN1150 > Catalog Thread Records.
+    #[cfg_attr(feature = "deku", deku(id_pat = "0x0003..=0x0004"))]
+    CatalogThread {
+        #[cfg_attr(
+            feature = "deku",
+            deku(
+                assert = "*record_type == CatalogFileDataType::kHFSPlusFolderThreadRecord \
+                || *record_type == CatalogFileDataType::kHFSPlusFileThreadRecord"
+            )
+        )]
+        record_type: CatalogFileDataType,
+        #[deku(endian = "big")]
+        reserved: i16,
+        #[deku(endian = "big")]
+        parent_id: CatalogNodeId,
+        node_name: HFSUniStr255,
+    },
 }
 
 /// Defined in documentation for `struct HFSPlusCatalogFile` in
@@ -752,50 +874,6 @@ enum CatalogFileBit {
 enum CatalogFileBitMask {
     kHFSFileLockedMask = 0x0001,
     kHFSThreadExistsMask = 0x0002,
-}
-
-/// BTree leaf node for Files. Defined as `struct HFSPlusCatalogFile` in
-/// TN1150 > Catalog File Records
-#[derive(Debug)]
-#[cfg_attr(feature = "deku", derive(DekuRead))]
-#[cfg_attr(
-    feature = "deku",
-    deku(endian = "endian", ctx = "endian: Endian", ctx_default = "Endian::Big")
-)]
-pub struct CatalogFile {
-    pub record_type: CatalogFileDataType,
-    pub flags: u16,
-    pub reserved_1: u32,
-    pub file_id: CatalogNodeId,
-    pub create_date: Date,
-    pub content_mod_date: Date,
-    pub attribute_mod_date: Date,
-    pub access_date: Date,
-    pub backup_date: Date,
-    pub permissions: BsdInfo,
-    pub user_info: FileInfo,
-    pub finder_info: ExtendedFileInfo,
-    pub text_encoding: u32, // TextEncoding,
-    pub reserved_2: u32,
-
-    pub data_fork: ForkData,
-    pub resource_fork: ForkData,
-}
-
-/// BTree link to CNID. Defined as `struct HFSPlusCatalogThread` in
-/// TN1150 > Catalog Thread Records.
-#[cfg_attr(feature = "deku", derive(DekuRead))]
-#[cfg_attr(
-    feature = "deku",
-    deku(endian = "endian", ctx = "endian: Endian", ctx_default = "Endian::Big")
-)]
-pub struct CatalogThread {
-    pub record_type: CatalogFileDataType,
-    #[deku(endian = "big")]
-    pub reserved: i16,
-    #[deku(endian = "big")]
-    pub parent_id: CatalogNodeId,
-    pub node_name: HFSUniStr255,
 }
 
 /// A location on screen, used to store window placement.

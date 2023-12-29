@@ -8,10 +8,7 @@ use memmap2::{Advice, MmapOptions};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fs::File;
-use std::io::BufReader;
-use std::io::BufWriter;
 use std::io::ErrorKind;
-use std::io::IoSlice;
 use std::io::{self, Cursor, Read, Seek, SeekFrom, Write};
 use std::os::unix::prelude::FileExt;
 use std::path::PathBuf;
@@ -95,7 +92,7 @@ fn main() -> Result<(), io::Error> {
     let all_files = map
         .values()
         .filter_map(|record| match record {
-            CatalogLeafRecord::File(file_record) => Some(cnid_to_key(file_record.file_id)),
+            CatalogLeafRecord::CatalogFile { file_id, .. } => Some(cnid_to_key(*file_id)),
             _ => None,
         })
         .map(|file_key| path_for_key(&map, file_key))
@@ -110,9 +107,9 @@ fn main() -> Result<(), io::Error> {
     let overflow = map
         .values()
         .filter(|v| {
-            if let CatalogLeafRecord::File(f) = v {
-                f.data_fork.total_blocks
-                    > f.data_fork
+            if let CatalogLeafRecord::CatalogFile { data_fork, .. } = v {
+                data_fork.total_blocks
+                    > data_fork
                         .extents
                         .iter()
                         .map(|extent| extent.block_count)
@@ -124,8 +121,8 @@ fn main() -> Result<(), io::Error> {
         .collect_vec();
     println!("Overflow Files: {}", overflow.len());
     overflow.iter().for_each(|record| {
-        if let CatalogLeafRecord::File(file_record) = record {
-            println!("{:?}", path_for_key(&map, cnid_to_key(file_record.file_id)));
+        if let CatalogLeafRecord::CatalogFile { file_id, .. } = record {
+            println!("{:?}", path_for_key(&map, cnid_to_key(*file_id)));
         }
     });
 
@@ -146,10 +143,13 @@ fn main() -> Result<(), io::Error> {
 
     // This could probably be parallelized
     map.values()
-        .filter(|record| matches!(record, CatalogLeafRecord::File(_)))
+        .filter(|record| matches!(record, CatalogLeafRecord::CatalogFile { .. }))
         .try_for_each(|record| {
-            if let CatalogLeafRecord::File(file_record) = record {
-                let file_key = cnid_to_key(file_record.file_id);
+            if let CatalogLeafRecord::CatalogFile {
+                file_id, data_fork, ..
+            } = record
+            {
+                let file_key = cnid_to_key(*file_id);
                 let original_file_path = path_for_key(&map, file_key);
 
                 // Skip HFS Private Data and various Metadata
@@ -165,7 +165,7 @@ fn main() -> Result<(), io::Error> {
                 }
 
                 // XXX Working with a truncated image, filter out any files with unavailable extents.
-                for extent in &file_record.data_fork.extents {
+                for extent in &data_fork.extents {
                     let end_byte =
                         (extent.start_block + extent.block_count) as u64 * block_size as u64;
                     if end_byte > volume_image_size {
@@ -176,7 +176,7 @@ fn main() -> Result<(), io::Error> {
 
                 println!(
                     "Processing {original_file_path:?} size={}",
-                    file_record.data_fork.logical_size
+                    data_fork.logical_size
                 );
 
                 // Create parent directories for output file if they do not exist
@@ -197,7 +197,7 @@ fn main() -> Result<(), io::Error> {
                 let res = copy_file_mmap(
                     &volume_image,
                     block_size as u16,
-                    file_record,
+                    record,
                     Vec::new(),
                     &mut output_file,
                 )?;
@@ -230,21 +230,20 @@ fn path_for_key(map: &BTreeMap<Vec<u8>, CatalogLeafRecord>, start: Vec<u8>) -> V
     loop {
         if let Some(thread) = map.get(&key) {
             key = match thread {
-                CatalogLeafRecord::Folder(_) => {
+                CatalogLeafRecord::CatalogFolder { .. } => {
                     unreachable!("Unexpected folder record in thread!");
                 }
-                CatalogLeafRecord::File(_) => {
+                CatalogLeafRecord::CatalogFile { .. } => {
                     unreachable!("Unexpected file record in thread!");
                 }
-                CatalogLeafRecord::FolderThread(t) => {
-                    let dir_name = String::from_utf16_lossy(&t.node_name.unicode);
+                CatalogLeafRecord::CatalogThread {
+                    node_name,
+                    parent_id,
+                    ..
+                } => {
+                    let dir_name = String::from_utf16_lossy(node_name.unicode.as_slice());
                     path.push(dir_name);
-                    cnid_to_key(t.parent_id)
-                }
-                CatalogLeafRecord::FileThread(t) => {
-                    let file_name = String::from_utf16_lossy(&t.node_name.unicode);
-                    path.push(file_name);
-                    cnid_to_key(t.parent_id)
+                    cnid_to_key(*parent_id)
                 }
             };
         } else {
@@ -419,33 +418,7 @@ fn parse_catalog_leaf(record_bytes: &Vec<u8>) -> Result<(Vec<u8>, CatalogLeafRec
     cur.read_to_end(&mut rest)?;
     let rest = BitSlice::from_slice(&rest);
 
-    // Peek at record kind
-    let buf = BitSlice::from_slice(&rest[0..=1]);
-    let (_rest, kind) =
-        CatalogFileDataType::read(&buf, ()).expect("Known Catalog File Datatype ID");
-
-    // Parse payload
-    // TODO Let Deku determine the variant type from the leading two bytes.
-    let record = match kind {
-        CatalogFileDataType::kHFSPlusFolderRecord => {
-            let (_rest, folder) = CatalogFolder::read(&rest, ()).expect("Parse Folder Record");
-            CatalogLeafRecord::Folder(folder)
-        }
-        CatalogFileDataType::kHFSPlusFileRecord => {
-            let (_rest, file) = CatalogFile::read(&rest, ()).expect("Parse file Record");
-            CatalogLeafRecord::File(file)
-        }
-        CatalogFileDataType::kHFSPlusFolderThreadRecord => {
-            let (_rest, folder_thread) =
-                CatalogThread::read(&rest, ()).expect("Parse Folder Thread Record");
-            CatalogLeafRecord::FolderThread(folder_thread)
-        }
-        CatalogFileDataType::kHFSPlusFileThreadRecord => {
-            let (_rest, file_thread) =
-                CatalogThread::read(&rest, ()).expect("Parse File Thread Record");
-            CatalogLeafRecord::FileThread(file_thread)
-        }
-    };
+    let (_rest, record) = CatalogLeafRecord::read(&rest, ()).expect("Read Catalogue Leaf Record");
 
     Ok((key, record))
 }
@@ -490,11 +463,17 @@ fn assemble_extents(
 fn copy_file_mmap(
     volume: &File,
     block_size: u16,
-    file_record: &CatalogFile,
+    file_record: &CatalogLeafRecord,
     overflow_extents: Vec<ExtentDescriptor>,
     output: &mut impl Write,
 ) -> Result<(u64, String), io::Error> {
-    let logical_size = file_record.data_fork.logical_size;
+    let CatalogLeafRecord::CatalogFile { data_fork, .. } = file_record else {
+        return Err(io::Error::new(
+            ErrorKind::InvalidInput,
+            "File variant is required for copying",
+        ));
+    };
+    let logical_size = data_fork.logical_size;
     let mmap = unsafe {
         MmapOptions::new()
             // .populate() // How much does this pre-populate?
@@ -507,8 +486,7 @@ fn copy_file_mmap(
     if logical_size > 0 {
         // Build a list of ranges for vectored write
         let mut bytes_to_read = logical_size as usize;
-        file_record
-            .data_fork
+        data_fork
             .extents
             .iter()
             .chain(overflow_extents.iter())
@@ -552,120 +530,4 @@ fn copy_file_mmap(
 
     let hash = format!("{:x}", hasher.finalize());
     Ok((logical_size, hash))
-}
-
-fn copy_file_data_from_extents(
-    volume: &mut (impl Read + Seek),
-    block_size: u16,
-    file_record: &CatalogFile,
-    overflow_extents: Vec<ExtentDescriptor>,
-    output: &mut impl Write,
-) -> Result<(u64, String), io::Error> {
-    let logical_size = file_record.data_fork.logical_size;
-    let mut bytes_read = 0u64;
-
-    let mut hasher = Sha256::new();
-    // Avoid work and corner cases for empty files.
-    if logical_size == 0 {
-        let hash = format!("{:x}", hasher.finalize());
-        return Ok((logical_size, hash));
-    }
-
-    let mut volume = BufReader::with_capacity(1048576, volume);
-    let mut output = BufWriter::with_capacity(1048576, output);
-
-    file_record
-        .data_fork
-        .extents
-        .iter()
-        .chain(overflow_extents.iter())
-        .try_for_each(|extent| {
-            let source_start_byte = extent.start_block as u64 * block_size as u64;
-
-            volume.seek(SeekFrom::Start(source_start_byte))?;
-            for _ in extent.start_block..(extent.start_block + extent.block_count) {
-                let mut buf = vec![0u8; block_size as usize];
-                volume.read_exact(&mut buf)?;
-                bytes_read += block_size as u64;
-
-                // Trim any bytes that we don't need.
-                if bytes_read > logical_size {
-                    let residual = bytes_read - logical_size;
-                    buf.truncate(residual as usize);
-                }
-
-                hasher.update(&buf);
-                output.write_all(&buf)?;
-            }
-
-            Ok::<(), io::Error>(())
-        })?;
-
-    let hash = format!("{:x}", hasher.finalize());
-    Ok((logical_size, hash))
-}
-
-fn copy_file_vectored(
-    volume: &File,
-    block_size: u16,
-    file_record: &CatalogFile,
-    overflow_extents: Vec<ExtentDescriptor>,
-    output: &mut impl Write,
-) -> Result<u64, io::Error> {
-    let logical_size = file_record.data_fork.logical_size;
-    let mmap = unsafe {
-        MmapOptions::new()
-            .populate()
-            .map_copy_read_only(volume)
-            .expect("foo")
-    };
-
-    // Build a list of ranges for vectored write
-    let mut bytes_to_read = logical_size as usize;
-    let extents: Vec<IoSlice> = file_record
-        .data_fork
-        .extents
-        .iter()
-        .chain(overflow_extents.iter())
-        .map(|extent| {
-            let start_byte = extent.start_block as usize * block_size as usize;
-            let length = extent.block_count as usize * block_size as usize;
-            let length = if length > bytes_to_read {
-                bytes_to_read
-            } else {
-                length
-            };
-            bytes_to_read = bytes_to_read
-                .checked_sub(length)
-                .expect("Do not read more than logical size");
-
-            let end_byte = start_byte + length;
-
-            #[cfg(unix)]
-            let _res = mmap.advise_range(Advice::Sequential, start_byte, length);
-            let slice = &mmap[start_byte..end_byte];
-            IoSlice::new(slice)
-        })
-        .collect();
-
-    assert_eq!(bytes_to_read, 0, "Must consume entire logical size of file");
-
-    // Does this actually handle partial writes correctly?
-    let mut written = 0;
-    while written < logical_size {
-        match output.write_vectored(&extents) {
-            Ok(0) => {
-                break;
-            }
-            Ok(n) => {
-                written += n as u64;
-            }
-            Err(err) => {
-                eprintln!("Failed to write: {err}");
-                return Err(err);
-            }
-        }
-    }
-
-    Ok(logical_size)
 }
