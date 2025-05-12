@@ -2,8 +2,12 @@
 name = "hfs-types"
 version = "0.1.0"
 edition = "2024"
-description = "Core types described by TN1150"
+description = "Core HFS types described by TN1150"
 keywords = ["hfs", "hfsplus"]
 categories = ["filesystem"]
+authors = ["Thomas Johnson <NTmatter@gmail.com>"]
 
 [dependencies]
+
+[features]
+file_info_union = []

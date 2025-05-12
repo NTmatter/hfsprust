@@ -1,5 +1,5 @@
 [workspace]
-members = ["hfs-types"]
+members = ["hfs-types", "hfs-types-rs"]
 resolver = "3"
 
 [package]
