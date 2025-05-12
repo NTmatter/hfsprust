@@ -1,14 +1,17 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+#![allow(non_upper_case_globals, non_snake_case)]
+#![deny(dead_code)]
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub const kHFSPlusSigWord: u16 = u16::from_be_bytes(*b"H+");
+pub const kHFSXSigWord: u16 = u16::from_be_bytes(*b"HX");
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+#[repr(C)]
+pub struct HFSPlusVolumeHeader {
+    pub signature: u16,
+    pub version: u16,
+    pub attributes: u32,
+    pub lastMountedVersion: u32,
+    pub journalInfoBlock: u32,
+
+    pub createDate: u32,
+    pub modifyDate: u32,
 }
