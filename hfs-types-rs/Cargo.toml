@@ -1,0 +1,11 @@
+[package]
+name = "hfs-types-rs"
+version = "0.1.0"
+edition = "2024"
+description = "Core HFS types described by TN1150, expressed in idiomatic Rust"
+authors = ["Thomas Johnson <NTmatter@gmail.com>"]
+
+[dependencies]
+
+[features]
+file_info_union = []
