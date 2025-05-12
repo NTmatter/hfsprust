@@ -1,0 +1,9 @@
+[package]
+name = "hfs-types"
+version = "0.1.0"
+edition = "2024"
+description = "Core types described by TN1150"
+keywords = ["hfs", "hfsplus"]
+categories = ["filesystem"]
+
+[dependencies]

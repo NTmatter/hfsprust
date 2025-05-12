@@ -1,7 +1,11 @@
+[workspace]
+members = ["hfs-types"]
+resolver = "3"
+
 [package]
 name = "hfsprust"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 publish = false
 authors = ["Thomas Johnson <NTmatter@gmail.com>"]
 description = "Tools for reading (or attempting to read) damaged HFS+ volumes."
