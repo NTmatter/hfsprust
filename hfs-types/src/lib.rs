@@ -198,6 +198,7 @@ pub enum BTNodeType {
     kBTMapNode = 2,
 }
 
+#[repr(packed)]
 pub struct BTHeaderRec {
     pub treeDepth: u16,
     pub rootNode: u32,
@@ -225,12 +226,14 @@ pub enum BTreeTypes {
     kReservedBTreeType = 255,
 }
 
+#[repr(u32)]
 pub enum BTreeHeaderRecAttribute {
     kBTBadCloseMask = 0x00000001,
     kBTBigKeysMask = 0x00000002,
     kBTVariableIndexKeysMask = 0x00000004,
 }
 
+#[repr(C)]
 pub struct HFSPlusCatalogKey {
     pub keyLength: u16,
     pub parentID: HFSCatalogNodeID,

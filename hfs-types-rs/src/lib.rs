@@ -2,6 +2,7 @@
 
 use std::num::NonZeroU32;
 
+#[repr(C)]
 pub struct UnicodeString255 {
     pub length: u16,
     pub unicode: [u16; 255],
@@ -336,6 +337,7 @@ pub enum BTreeAttributeMask {
     VariableIndexKeys = 4,
 }
 
+#[repr(C)]
 pub struct CatalogKey {
     pub key_length: u16,
     pub parent_id: CatalogNodeId,
