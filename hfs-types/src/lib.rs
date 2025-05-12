@@ -67,7 +67,7 @@ pub struct HFSPlusForkData {
     pub logicalSize: u64,
     pub clumpSize: u32,
     pub totalBlocks: u32,
-    pub extents: [HFSPlusExtentDescriptor; 8]
+    pub extents: [HFSPlusExtentDescriptor; 8],
 }
 
 #[repr(C)]
@@ -109,50 +109,130 @@ pub const UF_APPEND: u8 = 4;
 pub const UF_OPAQUE: u8 = 8;
 
 /// set user id on execution
-pub const S_ISUID: u16 = 0o0004000;
+pub const S_ISUID: u16 = 0o00_4000;
+
 /// set group id on execution
-pub const S_ISGID: u16 = 0o0002000;
+pub const S_ISGID: u16 = 0o00_2000;
+
 /// sticky bit
-pub const S_ISTXT: u16 = 0o0001000;
+pub const S_ISTXT: u16 = 0o00_1000;
+
 /// RWX mask for owner
-pub const S_IRWXU: u16 = 0o0000700;
+pub const S_IRWXU: u16 = 0o00_0700;
+
 /// R for owner
-pub const S_IRUSR: u16 = 0o0000400;
+pub const S_IRUSR: u16 = 0o00_0400;
+
 /// W for owner
-pub const S_IWUSR: u16 = 0o0000200;
+pub const S_IWUSR: u16 = 0o00_0200;
+
 /// X for owner
-pub const S_IXUSR: u16 = 0o0000100;
+pub const S_IXUSR: u16 = 0o00_0100;
+
 /// RWX mask for group
-pub const S_IRWXG: u16 = 0o0000070;
+pub const S_IRWXG: u16 = 0o00_0070;
+
 /// R for group
-pub const S_IRGRP: u16 = 0o0000040;
+pub const S_IRGRP: u16 = 0o00_0040;
+
 /// W for group
-pub const S_IWGRP: u16 = 0o0000020;
+pub const S_IWGRP: u16 = 0o00_0020;
+
 /// X for group
-pub const S_IXGRP: u16 = 0o0000010;
+pub const S_IXGRP: u16 = 0o00_0010;
+
 /// RWX mask for other
-pub const S_IRWXO: u16 = 0o0000007;
+pub const S_IRWXO: u16 = 0o00_0007;
+
 /// R for other
-pub const S_IROTH: u16 = 0o0000004;
+pub const S_IROTH: u16 = 0o00_0004;
+
 /// W for other
-pub const S_IWOTH: u16 = 0o0000002;
+pub const S_IWOTH: u16 = 0o00_0002;
+
 /// X for other
-pub const S_IXOTH: u16 = 0o0000001;
+pub const S_IXOTH: u16 = 0o00_0001;
+
 /// type of file mask
-pub const S_IFMT: u16 =   0o0170000;
+pub const S_IFMT: u16 = 0o17_0000;
+
 /// named pipe (fifo)
-pub const S_IFIFO: u16 =  0o0010000;
+pub const S_IFIFO: u16 = 0o01_0000;
+
 /// character special
-pub const S_IFCHR: u16 =  0o0020000;
+pub const S_IFCHR: u16 = 0o02_0000;
+
 /// directory
-pub const S_IFDIR: u16 =  0o0040000;
+pub const S_IFDIR: u16 = 0o04_0000;
+
 /// block special
-pub const S_IFBLK: u16 =  0o0060000;
+pub const S_IFBLK: u16 = 0o06_0000;
+
 /// regular
-pub const S_IFREG: u16 =  0o0100000;
+pub const S_IFREG: u16 = 0o10_0000;
+
 /// symbolic link
-pub const S_IFLNK: u16 =  0o0120000;
+pub const S_IFLNK: u16 = 0o12_0000;
+
 /// socket
-pub const S_IFSOCK: u16 = 0o0140000;
+pub const S_IFSOCK: u16 = 0o14_0000;
+
 /// whiteout
-pub const S_IFWHT: u16 =  0o0160000;
+pub const S_IFWHT: u16 = 0o16_0000;
+
+#[repr(C)]
+pub struct BTNodeDescriptor {
+    pub fLink: u32,
+    pub bLink: u32,
+    pub kind: BTNodeType,
+    pub height: u8,
+    pub numRecords: u16,
+    pub reserved: u16,
+}
+
+#[repr(i8)]
+pub enum BTNodeType {
+    kBTLeafNode = -1,
+    kBTIndexNode = 0,
+    kBTHeaderNode = 1,
+    kBTMapNode = 2,
+}
+
+pub struct BTHeaderRec {
+    pub treeDepth: u16,
+    pub rootNode: u32,
+    pub leafRecords: u32,
+    pub firstLeafNode: u32,
+    pub lastLeafNode: u32,
+    pub nodeSize: u16,
+    pub maxKeyLength: u16,
+    pub totalNodes: u32,
+    pub freeNodes: u32,
+    pub reserved1: u16,
+    // Misaligned
+    pub clumpSize: u32,
+    pub btreeType: u8,
+    pub keyCompareType: u8,
+    // long aligned again
+    pub attributes: u32,
+    pub reserved3: [u32; 16],
+}
+
+#[repr(u8)]
+pub enum BTreeTypes {
+    kHFSBTreeType = 0,    // control file
+    kUserBTreeType = 128, // user btree type starts from 128
+    kReservedBTreeType = 255,
+}
+
+pub enum BTreeHeaderRecAttribute {
+    kBTBadCloseMask = 0x00000001,
+    kBTBigKeysMask = 0x00000002,
+    kBTVariableIndexKeysMask = 0x00000004,
+}
+
+pub struct HFSPlusCatalogKey {
+    pub keyLength: u16,
+    pub parentID: HFSCatalogNodeID,
+    pub nodeName: HFSUniStr255,
+}
