@@ -3,7 +3,7 @@
 //! Types and constants from Apple's [TN1150 - HFS Plus Volume Format](https://developer.apple.com/library/archive/technotes/tn/tn1150.html)
 
 #![allow(non_upper_case_globals, non_snake_case, non_camel_case_types)]
-#![deny(dead_code, unsafe_code)]
+#![forbid(dead_code, unsafe_code)]
 
 /// File and folder name, up to 255 Unicode-16 characters. Strings are stored as
 /// fully decomposed in canonical order.
@@ -220,7 +220,7 @@ pub enum BTNodeType {
 }
 
 #[cfg_attr(not(feature = "packed_btree"), repr(C))]
-#[cfg_attr(feature = "packed_btree", repr(packed))]
+#[cfg_attr(feature = "packed_btree", repr(C, packed))]
 pub struct BTHeaderRec {
     pub treeDepth: u16,
     pub rootNode: u32,
@@ -255,6 +255,17 @@ pub enum BTreeHeaderRecAttribute {
     kBTVariableIndexKeysMask = 0x00000004,
 }
 
+#[repr(C)]
+pub struct BTreeUserDataRecord(pub [u8; 128]);
+
+#[repr(C)]
+pub struct BTreeAllocationMapRecord(pub Vec<u8>);
+
+pub fn IsAllocationBlockUsed(thisAllocationBlock: u32, allocationFileContents: &[u8]) -> bool {
+    let thisByte = allocationFileContents[(thisAllocationBlock / 8) as usize];
+    (thisByte & (1 << (7 - (thisAllocationBlock % 8)))) != 0
+}
+
 // endregion
 
 #[repr(C)]
@@ -262,4 +273,46 @@ pub struct HFSPlusCatalogKey {
     pub keyLength: u16,
     pub parentID: HFSCatalogNodeID,
     pub nodeName: HFSUniStr255,
+}
+
+pub const kHFSPlusFolderRecord: u16 = 0x0001;
+pub const kHFSPlusFileRecord: u16 = 0x0002;
+pub const kHFSPlusFolderThreadRecord: u16 = 0x0003;
+pub const kHFSPlusFileThreadRecord: u16 = 0x0004;
+
+pub const kHFSFolderRecord: u16 = 0x0100;
+pub const kHFSFileRecord: u16 = 0x0200;
+pub const kHFSFolderThreadRecord: u16 = 0x0300;
+pub const kHFSFileThreadRecord: u16 = 0x0400;
+
+/// An on-screen point
+///
+/// Described by TN1150 in [Finder Info](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#FinderInfo)
+#[repr(C)]
+pub struct Point {
+    pub v: i16,
+    pub h: i16,
+}
+
+/// An on-screen rectangle
+///
+/// Described by TN1150 in [Finder Info](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#FinderInfo)
+#[repr(C)]
+pub struct Rect {
+    pub top: i16,
+    pub left: i16,
+    pub bottom: i16,
+    pub right: i16,
+}
+
+pub type FourCharCode = u32;
+pub type OSType = FourCharCode;
+
+#[repr(C)]
+pub struct FileInfo {
+    pub fileType: OSType,
+    pub fileCreator: OSType,
+    pub finderFlags: u16,
+    pub location: Point,
+    pub reserved: u16,
 }

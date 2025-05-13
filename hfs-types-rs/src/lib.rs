@@ -3,7 +3,7 @@
 //! Types and constants from Apple's [TN1150 - HFS Plus Volume Format](https://developer.apple.com/library/archive/technotes/tn/tn1150.html),
 //! adjusted to use Rust-friendly naming.
 
-#![deny(dead_code, unsafe_code)]
+#![forbid(dead_code, unsafe_code, unused)]
 
 use std::num::NonZeroU32;
 
@@ -110,7 +110,6 @@ pub struct VolumeHeader {
 pub enum VolumeAttributeMask {
     // Bits 0-7 are reserved. Note that macOS uses bit 7 to indicate hardware
     // read-only status.
-
     /// Volume is write-protected due to hardware setting (macOS only).
     ///
     /// This may indicate that hardware is preventing writes to this volume.
@@ -138,11 +137,9 @@ pub enum VolumeAttributeMask {
     VolumeJournaled = 1 << 13,
 
     // Bit 14 is reserved
-
     /// Volume is write-protected by software. Any implementation MUST refuse to
     /// write if this bit is set.
     SoftwareLock = 1 << 15,
-
     // Bits 16-31 are reserved
 }
 
@@ -291,15 +288,14 @@ pub enum BTreeNodeType {
     Map = 2,
 }
 
-
 // TODO Conditional packed representation for memory transmute.
 /// B-tree file header.
-/// 
-/// Uses `repr(packed)` to handle misaligned `clump_size` and `attributes` fields. 
+///
+/// Uses `repr(packed)` to handle misaligned `clump_size` and `attributes` fields.
 ///
 /// Described in TN1150 [Header Record](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#HeaderRecord)
 #[cfg_attr(not(feature = "packed_btree"), repr(C))]
-#[cfg_attr(feature = "packed_btree", repr(packed))]
+#[cfg_attr(feature = "packed_btree", repr(C, packed))]
 pub struct BTreeHeaderRecord {
     /// Current depth of the tree. This should be equal to the Root Node's height.
     pub tree_depth: u16,
@@ -389,11 +385,112 @@ pub enum BTreeAttributeMask {
     VariableIndexKeys = 4,
 }
 
+#[repr(C)]
+pub struct UserDataRecord(pub [u8; 128]);
+
+/// Allocation File Bitmap
+///
+/// Described by TN1150 in [Allocation File](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#AllocationFile)
+#[repr(C)]
+pub struct AllocationMapRecord(pub Vec<u8>);
+
+impl AllocationMapRecord {
+    /// Determine if a block has been set in the bitmap.
+    ///
+    /// Returns whether the bit is set, or an error if block index is out of bounds.
+    pub fn is_block_used(&self, block: u32) -> Result<bool, ()> {
+        let offset = block / 8;
+        let Some(byte) = self.0.get(offset as usize) else {
+            return Err(());
+        };
+
+        let bit_offset = block % 8;
+        let mask = (1 << (7 - bit_offset)) as u8;
+
+        let is_set = byte & mask != 0;
+
+        Ok(is_set)
+    }
+}
+
 // endregion
 
+/// Described by TN1150 in [Catalog File Key](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#CatalogFile)
 #[repr(C)]
 pub struct CatalogKey {
-    pub key_length: u16,
+    pub length: u16,
     pub parent_id: CatalogNodeId,
     pub node_name: UnicodeString255,
+}
+
+/// Type of data contained in this catalog file.
+///
+/// Described by TN1150 in [Catalog File Data](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#CatalogFile)
+#[repr(u16)]
+pub enum CatalogFileDataRecordType {
+    Folder = 0x0001,
+    File = 0x0002,
+    FolderThread = 0x0003,
+    FileThread = 0x0004,
+}
+
+/// Type of data contained in this catalog file (legacy HFS only)
+///
+/// Described by TN1150 in [Catalog File Data](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#CatalogFile)
+#[repr(u16)]
+pub enum CatalogFileDataThreadRecordType {
+    Folder = 0x0100,
+    File = 0x0200,
+    FolderThread = 0x0300,
+    FileThread = 0x0400,
+}
+
+/// An on-screen point
+///
+/// Described by TN1150 in [Finder Info](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#FinderInfo)
+#[repr(C)]
+pub struct Point {
+    pub v: i16,
+    pub h: i16,
+}
+
+/// An on-screen rectangle
+///
+/// Described by TN1150 in [Finder Info](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#FinderInfo)
+#[repr(C)]
+pub struct Rect {
+    pub top: i16,
+    pub left: i16,
+    pub bottom: i16,
+    pub right: i16,
+}
+
+pub type FourCharCode = u32;
+pub type OsType = FourCharCode;
+
+#[repr(C)]
+pub struct FileInfo {
+    file_type: OsType,
+    file_creator: OsType,
+    finder_flags: u16,
+    location: Point,
+    reserved: u16,
+}
+
+#[repr(C)]
+pub struct CatalogFolder {
+    pub record_type: i16,
+    pub flags: u16,
+    pub valence: u32,
+    pub folder_id: CatalogNodeId,
+    pub create_date: DateTime,
+    pub content_modification_date: DateTime,
+    pub attribute_modification_date: DateTime,
+    pub access_date: DateTime,
+    pub backup_date: DateTime,
+    pub permissions: BsdInfo,
+    pub user_info: (),   // TODO FolderInfo
+    pub finder_info: (), // TODO ExtendedFolderInfo
+    pub text_encoding: u32,
+    pub reserved: u32,
 }
