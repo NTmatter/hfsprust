@@ -6,8 +6,11 @@ description = "Core HFS types described by TN1150"
 keywords = ["hfs", "hfsplus"]
 categories = ["filesystem"]
 authors = ["Thomas Johnson <NTmatter@gmail.com>"]
+license = "MIT"
 
 [dependencies]
 
 [features]
+default = []
 file_info_union = []
+packed_btree = []

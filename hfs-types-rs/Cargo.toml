@@ -3,9 +3,14 @@ name = "hfs-types-rs"
 version = "0.1.0"
 edition = "2024"
 description = "Core HFS types described by TN1150, expressed in idiomatic Rust"
+keywords = ["hfs", "hfsplus"]
+categories = ["filesystem"]
 authors = ["Thomas Johnson <NTmatter@gmail.com>"]
+license = "MIT"
 
 [dependencies]
 
 [features]
+default = []
 file_info_union = []
+packed_btree = []

@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+
+//! Types and constants from Apple's [TN1150 - HFS Plus Volume Format](https://developer.apple.com/library/archive/technotes/tn/tn1150.html)
+
 #![allow(non_upper_case_globals, non_snake_case, non_camel_case_types)]
 #![deny(dead_code, unsafe_code)]
 
@@ -60,6 +64,21 @@ pub struct HFSPlusVolumeHeader {
     pub encodingsBitmap: u64,
 
     pub finderInfo: [u32; 8],
+}
+
+#[repr(u32)]
+pub enum HFSPlusVolumeAttributeBit {
+    // Bits 0-6 are reserved
+    kHFSVolumeHardwareLockBit = 7,
+    kHFSVolumeUnmountedBit = 8,
+    kHFSVolumeSparedBlocksBit = 9,
+    kHFSVolumeNoCacheRequiredBit = 10,
+    kHFSBootVolumeInconsistentBit = 11,
+    kHFSCatalogNodeIDsReusedBit = 12,
+    kHFSVolumeJournaledBit = 13,
+    // Bit 14 is reserved
+    kHFSVolumeSoftwareLockBit = 15,
+    // Bits 16-31 are reserved
 }
 
 #[repr(C)]
@@ -180,6 +199,8 @@ pub const S_IFSOCK: u16 = 0o14_0000;
 /// whiteout
 pub const S_IFWHT: u16 = 0o16_0000;
 
+// region B-tree
+
 #[repr(C)]
 pub struct BTNodeDescriptor {
     pub fLink: u32,
@@ -198,7 +219,8 @@ pub enum BTNodeType {
     kBTMapNode = 2,
 }
 
-#[repr(packed)]
+#[cfg_attr(not(feature = "packed_btree"), repr(C))]
+#[cfg_attr(feature = "packed_btree", repr(packed))]
 pub struct BTHeaderRec {
     pub treeDepth: u16,
     pub rootNode: u32,
@@ -232,6 +254,8 @@ pub enum BTreeHeaderRecAttribute {
     kBTBigKeysMask = 0x00000002,
     kBTVariableIndexKeysMask = 0x00000004,
 }
+
+// endregion
 
 #[repr(C)]
 pub struct HFSPlusCatalogKey {

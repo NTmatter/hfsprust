@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: MIT
+
+//! Types and constants from Apple's [TN1150 - HFS Plus Volume Format](https://developer.apple.com/library/archive/technotes/tn/tn1150.html),
+//! adjusted to use Rust-friendly naming.
+
 #![deny(dead_code, unsafe_code)]
 
 use std::num::NonZeroU32;
@@ -99,6 +104,46 @@ pub struct VolumeHeader {
     pub catalog_file: ForkData,
     pub attributes_file: ForkData,
     pub startup_file: ForkData,
+}
+
+#[repr(u32)]
+pub enum VolumeAttributeMask {
+    // Bits 0-7 are reserved. Note that macOS uses bit 7 to indicate hardware
+    // read-only status.
+
+    /// Volume is write-protected due to hardware setting (macOS only).
+    ///
+    /// This may indicate that hardware is preventing writes to this volume.
+    HardwareLock = 1 << 7,
+
+    /// The volume was correctly flushed before being unmounted. This bit must
+    /// be cleared when the volume is mounted for writing. If it is set when
+    /// mounting, a consistency check is necessary.
+    Unmounted = 1 << 8,
+
+    /// The overflow file contains bad block records.
+    SparedBlocks = 1 << 9,
+
+    /// Blocks from this volume should not be cached.
+    NoCacheRequired = 1 << 10,
+
+    /// The volume is currently mounted, inverted from the Unmounted bit. If this
+    /// bit is set, the volume requires a consistency check.
+    VolumeInconsistent = 1 << 11,
+
+    /// The `next_catalog_id` field has overflowed, requiring reuse of smaller ids.
+    CatalogNodeIdsReused = 1 << 12,
+
+    /// The volume is journaled, and the journal is available at the journal_info_block
+    VolumeJournaled = 1 << 13,
+
+    // Bit 14 is reserved
+
+    /// Volume is write-protected by software. Any implementation MUST refuse to
+    /// write if this bit is set.
+    SoftwareLock = 1 << 15,
+
+    // Bits 16-31 are reserved
 }
 
 /// Information about the size and location of a file.
@@ -214,6 +259,8 @@ pub enum BsdInfoFileModeFlag {
     Whiteout = 0o16_0000,
 }
 
+// region B-tree
+
 /// Described in TN1150 [B-Trees](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#BTrees)
 #[repr(C)]
 pub struct BTreeNodeDescriptor {
@@ -244,10 +291,15 @@ pub enum BTreeNodeType {
     Map = 2,
 }
 
+
+// TODO Conditional packed representation for memory transmute.
 /// B-tree file header.
+/// 
+/// Uses `repr(packed)` to handle misaligned `clump_size` and `attributes` fields. 
 ///
 /// Described in TN1150 [Header Record](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#HeaderRecord)
-#[repr(packed)]
+#[cfg_attr(not(feature = "packed_btree"), repr(C))]
+#[cfg_attr(feature = "packed_btree", repr(packed))]
 pub struct BTreeHeaderRecord {
     /// Current depth of the tree. This should be equal to the Root Node's height.
     pub tree_depth: u16,
@@ -336,6 +388,8 @@ pub enum BTreeAttributeMask {
     /// Must be set for the HFS+ Catalog B-tree, and cleared for the HFS+ Extents B-tree.
     VariableIndexKeys = 4,
 }
+
+// endregion
 
 #[repr(C)]
 pub struct CatalogKey {
