@@ -508,3 +508,100 @@ pub struct HFSPlusAttrExtents {
 pub const kHFSPlusAttrInlineData: u32 = 0x10;
 pub const kHFSPlusAttrForkData: u32 = 0x20;
 pub const kHFSPlusAttrExtents: u32 = 0x30;
+
+/// Journal info and location
+///
+/// Described by TN1150 in [Journal Info Block](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#JournalInfoBlock)
+#[cfg_attr(feature = "repr_c", repr(C))]
+pub struct JournalInfoBlock {
+    /// Journal flags described by `kJournal*`
+    pub flags: u32,
+
+    /// Reserved for describing the journal device when the `kJIJournalOnOtherDeviceMask` bit is set.
+    pub device_signature: [u32; 8],
+    pub offset: u64,
+    pub size: u64,
+    pub reserved: [u32; 32],
+}
+
+/// Journal header and transactions reside on the volume being journaled.
+pub const kJIJournalInFSMask: u32 = 0x00000001;
+
+/// Journal header and buffer reside on the device described by `device_signature`.
+pub const kJIJournalOnOtherDeviceMask: u32 = 0x00000002;
+
+/// The Journal header is invalid and needs to be initialized.
+pub const kJIJournalNeedInitMask: u32 = 0x00000004;
+
+#[cfg_attr(feature = "repr_c", repr(C))]
+pub struct journal_header {
+    /// Must be equal to `JOURNAL_HEADER_MAGIC`
+    pub header_magic: u32,
+
+    /// Must be equal to `ENDIAN_MAGIC`
+    pub endian_magic: u32,
+
+    /// Offset (in bytes) from the start of the journal header to the start of the
+    /// first (oldest) transaction
+    pub start: u64,
+
+    /// Offset (in bytes) from the start of the journal header to the end of the last transaction.
+    ///
+    /// May be less than start, as the journal is a circular buffer. If equal to start, there are no transactions to replay.
+    pub end: u64,
+
+    /// Size of the journal, in bytes. Includes the journal header and buffer.
+    pub size: u64,
+
+    /// Size of the block list header, in bytes.
+    pub blhdr_size: u32,
+
+    /// Checksum of the journal header
+    pub checksum: u32,
+
+    /// Size of the Journal header in bytes. Occupies exactly one sector.
+    pub jhdr_size: u32,
+}
+
+pub const JOURNAL_HEADER_MAGIC: u32 = 0x4a4e4c78;
+pub const ENDIAN_MAGIC: u32 = 0x12345678;
+
+#[cfg_attr(feature = "repr_c", repr(C))]
+pub struct block_list_header {
+    pub max_blocks: u16,
+    pub num_blocks: u16,
+    pub bytes_used: u32,
+    pub checksum: u32,
+    pub pad: u32,
+    pub block_info: Vec<block_info>,
+}
+
+#[cfg_attr(feature = "repr_c", repr(C))]
+pub struct block_info {
+    /// Sector number where data in this block must be written.
+    ///
+    /// If set to `0xFFFFFFFFFFFFFFFF`, this block should be skipped.
+    pub bnum: u64,
+
+    /// Number of bytes to copy from Journal Buffer to sector `bnum`.
+    /// MUST be a multiple of 512 bytes. Reserved if operating on the first
+    /// block info.
+    pub bsize: u32,
+
+    /// In-memory only, for tracking transactions requiring multiple block lists.
+    /// Should be zero or -1 on-disk.
+    pub next: u32,
+}
+
+/// Checksum a series of bytes for the Journal Header and Block List.
+///
+/// Described by TN1150 in [Journal Checksums](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#Checksum)
+pub fn calculate_checksum(bytes: &[u8]) -> u32 {
+    let mut checksum: u32 = 0;
+
+    for byte in bytes {
+        checksum = (checksum << 8) ^ (checksum + *byte as u32);
+    }
+
+    !checksum
+}
