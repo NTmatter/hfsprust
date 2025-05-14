@@ -163,7 +163,7 @@ pub struct ForkData {
 
     /// First eight extent descriptors. Any remaining descriptors are stored in
     /// the [Extents Overflow File](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#ExtentsOverflowFile).
-    pub extents: [ExtentDescriptor; 8],
+    pub extents: ExtentRecord,
 }
 
 /// Identifies the start and length (in blocks) of an extent.
@@ -174,6 +174,8 @@ pub struct ExtentDescriptor {
     pub start_block: u32,
     pub block_count: u32,
 }
+
+pub type ExtentRecord = [ExtentDescriptor; 8];
 
 /// File ownership, permissions, mode, and type-specific information.
 ///
@@ -565,6 +567,32 @@ pub struct FileInfo {
     pub reserved: u16,
 }
 
+#[repr(u32)]
+pub enum WellKnownFileTypeCode {
+    /// File type code for Hardlink files
+    ///
+    /// Described by TN1150 in [Hard Links](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#HardLinks)
+    HardLink = u32::from_be_bytes(*b"hlnk"),
+
+    /// File type code for Symlink files
+    ///
+    /// Described by TN1150 in [Symbolic Links](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#Symlinks)
+    SymbolicLink = u32::from_be_bytes(*b"slnk"),
+}
+
+#[repr(u32)]
+pub enum WellKnownFileCreatorCode {
+    /// Creator code for Hardlink files
+    ///
+    /// Described by TN1150 in [Hard Links](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#HardLinks)
+    HardLink = u32::from_be_bytes(*b"hfs+"),
+
+    /// Creator code for Symlink files
+    ///
+    /// Described by TN1150 in [Symbolic Links](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#Symlinks)
+    SymbolicLink = u32::from_be_bytes(*b"rhap"),
+}
+
 /// Described by TN1150 in [Finder Info](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#FinderInfo)
 #[cfg_attr(feature = "repr_c", repr(C))]
 pub struct ExtendedFileInfo {
@@ -646,4 +674,52 @@ pub enum ExtendedFinderFlags {
 
     /// The file contains routing info resource
     HasRoutingInfo = 0x0004,
+}
+
+/// Extents Overflow File Key
+///
+/// Described by TN1150 in [Extents Overflow File Key](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#ExtentsOverflowFile)
+#[cfg_attr(feature = "repr_c", repr(C))]
+pub struct ExtentKey {
+    pub key_length: u16,
+    /// Type of fork for which this record applies. Must be 0x00 for the Data Fork
+    /// and 0xFF for the resource fork.
+    pub fork_type: ExtentKeyForkType,
+    pub padding: u8,
+    pub file_id: CatalogNodeId,
+    pub start_block: u32,
+}
+
+#[repr(u8)]
+pub enum ExtentKeyForkType {
+    Data = 0x00,
+    Resource = 0xFF,
+}
+
+/// Described by TN1150 in [Fork Data Attributes](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#ForkDataAttributes]
+#[cfg_attr(feature = "repr_c", repr(C))]
+pub struct AttributeForkData {
+    pub record_type: AttributeForkDataRecordType,
+    pub reserved: u32,
+    pub fork_data: ForkData,
+}
+
+/// Described by TN1150 in [Extension Attributes](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#ExtensionAttributes)
+#[cfg_attr(feature = "repr_c", repr(C))]
+pub struct AttributeExtents {
+    pub record_type: AttributeForkDataRecordType,
+    pub reserved: u32,
+    pub extents: ExtentRecord,
+}
+
+#[repr(u32)]
+pub enum AttributeForkDataRecordType {
+    /// Reserved for future use.
+    InlineData = 0x10,
+
+    /// The record is a Fork Data Attribute. It should be interpreted as an `AttributeForkData`
+    ForkData = 0x20,
+
+    /// The record is an extension attribute. It should be interpreted as an `AttributeExtent`
+    Extents = 0x30,
 }

@@ -81,19 +81,30 @@ pub enum HFSPlusVolumeAttributeBit {
     // Bits 16-31 are reserved
 }
 
+/// Descriptor for fork data and location of core data.
+///
+/// Described by TN1150 in [Fork Data Structure](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#ForkDataStructure)
 #[cfg_attr(feature = "repr_c", repr(C))]
 pub struct HFSPlusForkData {
     pub logicalSize: u64,
     pub clumpSize: u32,
     pub totalBlocks: u32,
-    pub extents: [HFSPlusExtentDescriptor; 8],
+    pub extents: HFSPlusExtentRecord,
 }
 
+/// Start and length of allocation block
+///
+/// Described by TN1150 in [Fork Data Structure](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#ForkDataStructure)
 #[cfg_attr(feature = "repr_c", repr(C))]
 pub struct HFSPlusExtentDescriptor {
+    /// First allocation block in the extent
     pub startBlock: u32,
+
+    /// The length of the extent, in allocation blocks
     pub blockCount: u32,
 }
+
+pub type HFSPlusExtentRecord = [HFSPlusExtentDescriptor; 8];
 
 #[cfg_attr(feature = "repr_c", repr(C))]
 pub struct HFSPlusBSDInfo {
@@ -390,6 +401,26 @@ pub struct FileInfo {
     pub reserved: u16,
 }
 
+/// File type code for Hardlink files
+///
+/// Described by TN1150 in [Hard Links](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#HardLinks)
+pub const kHardLinkFileType: OSType = u32::from_be_bytes(*b"hlnk");
+
+/// Creator code for Hardlink files
+///
+/// Described by TN1150 in [Hard Links](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#HardLinks)
+pub const kHFSPlusCreator: OSType = u32::from_be_bytes(*b"hfs+");
+
+/// File type code for Symlink files
+///
+/// Described by TN1150 in [Symbolic Links](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#Symlinks)
+pub const kSymLinkFileType: OSType = u32::from_be_bytes(*b"slnk");
+
+/// Creator code for Symlink files
+///
+/// Described by TN1150 in [Symbolic Links](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#Symlinks)
+pub const kSymLinkCreator: OSType = u32::from_be_bytes(*b"rhap");
+
 /// Described by TN1150 in [Finder Info](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#FinderInfo)
 #[cfg_attr(feature = "repr_c", repr(C))]
 pub struct ExtendedFileInfo {
@@ -450,3 +481,30 @@ pub const kExtendedFlagHasCustomBadge: u16 = 0x0100;
 
 /// The file contains routing info resource
 pub const kExtendedFlagHasRoutingInfo: u16 = 0x0004;
+
+pub struct HFSPlusExtentKey {
+    pub key_length: u16,
+    /// Type of fork for which this record applies. Must be 0x00 for the Data Fork
+    /// and 0xFF for the resource fork.
+    pub fork_type: u8,
+    pub padding: u8,
+    pub file_id: HFSCatalogNodeID,
+    pub start_block: u32,
+}
+
+#[cfg_attr(feature = "repr_c", repr(C))]
+pub struct AttributeForkData {
+    pub record_type: u32,
+    pub reserved: u32,
+    pub fork_data: HFSPlusForkData,
+}
+
+pub struct HFSPlusAttrExtents {
+    pub recordType: u32,
+    pub reserved: u32,
+    pub extents: HFSPlusExtentRecord,
+}
+
+pub const kHFSPlusAttrInlineData: u32 = 0x10;
+pub const kHFSPlusAttrForkData: u32 = 0x20;
+pub const kHFSPlusAttrExtents: u32 = 0x30;
