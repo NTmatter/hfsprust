@@ -9,7 +9,7 @@
 /// fully decomposed in canonical order.
 ///
 /// Described in TN1150 [HFS Plus Names](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#HFSPlusNames)
-#[repr(C)]
+#[cfg_attr(feature = "repr_c", repr(C))]
 pub struct HFSUniStr255 {
     pub length: u16,
     pub unicode: [u16; 255],
@@ -35,7 +35,7 @@ pub const kHFSRepairCatalogFileID: u32 = 14;
 pub const kHFSBogusExtentFileID: u32 = 15;
 pub const kHFSFirstUserCatalogNodeID: u32 = 16;
 
-#[repr(C)]
+#[cfg_attr(feature = "repr_c", repr(C))]
 pub struct HFSPlusVolumeHeader {
     pub signature: u16,
     pub version: u16,
@@ -81,7 +81,7 @@ pub enum HFSPlusVolumeAttributeBit {
     // Bits 16-31 are reserved
 }
 
-#[repr(C)]
+#[cfg_attr(feature = "repr_c", repr(C))]
 pub struct HFSPlusForkData {
     pub logicalSize: u64,
     pub clumpSize: u32,
@@ -89,13 +89,13 @@ pub struct HFSPlusForkData {
     pub extents: [HFSPlusExtentDescriptor; 8],
 }
 
-#[repr(C)]
+#[cfg_attr(feature = "repr_c", repr(C))]
 pub struct HFSPlusExtentDescriptor {
     pub startBlock: u32,
     pub blockCount: u32,
 }
 
-#[repr(C)]
+#[cfg_attr(feature = "repr_c", repr(C))]
 pub struct HFSPlusBSDInfo {
     pub ownerID: u32,
     pub groupID: u32,
@@ -111,7 +111,7 @@ pub struct HFSPlusBSDInfo {
 }
 
 #[cfg(feature = "file_info_union")]
-#[repr(C)]
+#[cfg_attr(feature = "repr_c", repr(C))]
 pub union HFSPlusBSDInfoSpecial {
     pub iNodeNum: u32,
     pub linkCount: u32,
@@ -201,7 +201,7 @@ pub const S_IFWHT: u16 = 0o16_0000;
 
 // region B-tree
 
-#[repr(C)]
+#[cfg_attr(feature = "repr_c", repr(C))]
 pub struct BTNodeDescriptor {
     pub fLink: u32,
     pub bLink: u32,
@@ -219,8 +219,9 @@ pub enum BTNodeType {
     kBTMapNode = 2,
 }
 
-#[cfg_attr(not(feature = "packed_btree"), repr(C))]
-#[cfg_attr(feature = "packed_btree", repr(C, packed))]
+#[cfg_attr(all(feature = "repr_c", not(feature = "packed_btree")), repr(C))]
+#[cfg_attr(all(not(feature = "repr_c"), feature = "packed_btree"), repr(packed))]
+#[cfg_attr(all(feature = "repr_c", feature = "packed_btree"), repr(C, packed))]
 pub struct BTHeaderRec {
     pub treeDepth: u16,
     pub rootNode: u32,
@@ -255,10 +256,10 @@ pub enum BTreeHeaderRecAttribute {
     kBTVariableIndexKeysMask = 0x00000004,
 }
 
-#[repr(C)]
+#[cfg_attr(feature = "repr_c", repr(C))]
 pub struct BTreeUserDataRecord(pub [u8; 128]);
 
-#[repr(C)]
+#[cfg_attr(feature = "repr_c", repr(C))]
 pub struct BTreeAllocationMapRecord(pub Vec<u8>);
 
 pub fn IsAllocationBlockUsed(thisAllocationBlock: u32, allocationFileContents: &[u8]) -> bool {
@@ -268,7 +269,7 @@ pub fn IsAllocationBlockUsed(thisAllocationBlock: u32, allocationFileContents: &
 
 // endregion
 
-#[repr(C)]
+#[cfg_attr(feature = "repr_c", repr(C))]
 pub struct HFSPlusCatalogKey {
     pub keyLength: u16,
     pub parentID: HFSCatalogNodeID,
@@ -288,7 +289,7 @@ pub const kHFSFileThreadRecord: u16 = 0x0400;
 /// An on-screen point
 ///
 /// Described by TN1150 in [Finder Info](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#FinderInfo)
-#[repr(C)]
+#[cfg_attr(feature = "repr_c", repr(C))]
 pub struct Point {
     pub v: i16,
     pub h: i16,
@@ -297,7 +298,7 @@ pub struct Point {
 /// An on-screen rectangle
 ///
 /// Described by TN1150 in [Finder Info](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#FinderInfo)
-#[repr(C)]
+#[cfg_attr(feature = "repr_c", repr(C))]
 pub struct Rect {
     pub top: i16,
     pub left: i16,
@@ -308,7 +309,7 @@ pub struct Rect {
 pub type FourCharCode = u32;
 pub type OSType = FourCharCode;
 
-#[repr(C)]
+#[cfg_attr(feature = "repr_c", repr(C))]
 pub struct FileInfo {
     pub fileType: OSType,
     pub fileCreator: OSType,

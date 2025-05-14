@@ -7,7 +7,7 @@
 
 use std::num::NonZeroU32;
 
-#[repr(C)]
+#[cfg_attr(feature = "repr_c", repr(C))]
 pub struct UnicodeString255 {
     pub length: u16,
     pub unicode: [u16; 255],
@@ -66,7 +66,7 @@ pub enum KnownCreatorCodes {
 /// Volume header, offset 1024 bytes from start of disk.
 ///
 /// Described in TN1150 [Volume Header](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#VolumeHeader)
-#[repr(C)]
+#[cfg_attr(feature = "repr_c", repr(C))]
 pub struct VolumeHeader {
     pub signature: VolumeSignature,
     pub version: VolumeVersion,
@@ -146,7 +146,7 @@ pub enum VolumeAttributeMask {
 /// Information about the size and location of a file.
 ///
 /// Described in TN1150 [Fork Data Structure](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#ForkDataStructure)
-#[repr(C)]
+#[cfg_attr(feature = "repr_c", repr(C))]
 pub struct ForkData {
     /// Total size of data, in bytes
     pub logical_size: u64,
@@ -168,7 +168,7 @@ pub struct ForkData {
 /// Identifies the start and length (in blocks) of an extent.
 ///
 /// Described in TN1150 [Fork Data Structure](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#ForkDataStructure)
-#[repr(C)]
+#[cfg_attr(feature = "repr_c", repr(C))]
 pub struct ExtentDescriptor {
     pub start_block: u32,
     pub block_count: u32,
@@ -180,7 +180,7 @@ pub struct ExtentDescriptor {
 /// descriptor is being used.
 ///
 /// Described in TN1150 [HFS Plus Permissions](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#HFSPlusPermissions)
-#[repr(C)]
+#[cfg_attr(feature = "repr_c", repr(C))]
 pub struct BsdInfo {
     pub owner_id: u32,
     pub group_id: u32,
@@ -202,7 +202,7 @@ pub struct BsdInfo {
 }
 
 #[cfg(feature = "file_info_union")]
-#[repr(C)]
+#[cfg_attr(feature = "repr_c", repr(C))]
 pub union HFSPlusBSDInfoSpecial {
     pub link_reference_count: u32,
     pub hardlink_count: u32,
@@ -259,7 +259,7 @@ pub enum BsdInfoFileModeFlag {
 // region B-tree
 
 /// Described in TN1150 [B-Trees](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#BTrees)
-#[repr(C)]
+#[cfg_attr(feature = "repr_c", repr(C))]
 pub struct BTreeNodeDescriptor {
     /// Node Number of the next node of this type, or none if this is the last node.
     pub forward_link: Option<NonZeroU32>,
@@ -294,8 +294,9 @@ pub enum BTreeNodeType {
 /// Uses `repr(packed)` to handle misaligned `clump_size` and `attributes` fields.
 ///
 /// Described in TN1150 [Header Record](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#HeaderRecord)
-#[cfg_attr(not(feature = "packed_btree"), repr(C))]
-#[cfg_attr(feature = "packed_btree", repr(C, packed))]
+#[cfg_attr(all(feature = "repr_c", not(feature = "packed_btree")), repr(C))]
+#[cfg_attr(all(not(feature = "repr_c"), feature = "packed_btree"), repr(packed))]
+#[cfg_attr(all(feature = "repr_c", feature = "packed_btree"), repr(C, packed))]
 pub struct BTreeHeaderRecord {
     /// Current depth of the tree. This should be equal to the Root Node's height.
     pub tree_depth: u16,
@@ -385,13 +386,13 @@ pub enum BTreeAttributeMask {
     VariableIndexKeys = 4,
 }
 
-#[repr(C)]
+#[cfg_attr(feature = "repr_c", repr(C))]
 pub struct UserDataRecord(pub [u8; 128]);
 
 /// Allocation File Bitmap
 ///
 /// Described by TN1150 in [Allocation File](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#AllocationFile)
-#[repr(C)]
+#[cfg_attr(feature = "repr_c", repr(C))]
 pub struct AllocationMapRecord(pub Vec<u8>);
 
 impl AllocationMapRecord {
@@ -416,7 +417,7 @@ impl AllocationMapRecord {
 // endregion
 
 /// Described by TN1150 in [Catalog File Key](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#CatalogFile)
-#[repr(C)]
+#[cfg_attr(feature = "repr_c", repr(C))]
 pub struct CatalogKey {
     pub length: u16,
     pub parent_id: CatalogNodeId,
@@ -448,7 +449,7 @@ pub enum CatalogFileDataThreadRecordType {
 /// An on-screen point
 ///
 /// Described by TN1150 in [Finder Info](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#FinderInfo)
-#[repr(C)]
+#[cfg_attr(feature = "repr_c", repr(C))]
 pub struct Point {
     pub v: i16,
     pub h: i16,
@@ -457,7 +458,7 @@ pub struct Point {
 /// An on-screen rectangle
 ///
 /// Described by TN1150 in [Finder Info](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#FinderInfo)
-#[repr(C)]
+#[cfg_attr(feature = "repr_c", repr(C))]
 pub struct Rect {
     pub top: i16,
     pub left: i16,
@@ -468,16 +469,16 @@ pub struct Rect {
 pub type FourCharCode = u32;
 pub type OsType = FourCharCode;
 
-#[repr(C)]
+#[cfg_attr(feature = "repr_c", repr(C))]
 pub struct FileInfo {
-    file_type: OsType,
-    file_creator: OsType,
-    finder_flags: u16,
-    location: Point,
-    reserved: u16,
+    pub file_type: OsType,
+    pub file_creator: OsType,
+    pub finder_flags: u16,
+    pub location: Point,
+    pub reserved: u16,
 }
 
-#[repr(C)]
+#[cfg_attr(feature = "repr_c", repr(C))]
 pub struct CatalogFolder {
     pub record_type: i16,
     pub flags: u16,
