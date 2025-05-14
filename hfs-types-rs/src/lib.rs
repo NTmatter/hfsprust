@@ -10,6 +10,7 @@ use std::num::NonZeroU32;
 #[cfg_attr(feature = "repr_c", repr(C))]
 pub struct UnicodeString255 {
     pub length: u16,
+    // DESIGN Should this be a Vec<u8>, or is it a fixed-size array?
     pub unicode: [u16; 255],
 }
 
@@ -427,23 +428,13 @@ pub struct CatalogKey {
 /// Type of data contained in this catalog file.
 ///
 /// Described by TN1150 in [Catalog File Data](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#CatalogFile)
-#[repr(u16)]
+#[repr(i16)]
 pub enum CatalogFileDataRecordType {
+    /// BTree Record Type for a folder, to be interpreted as a `CatalogFolder`.
     Folder = 0x0001,
     File = 0x0002,
     FolderThread = 0x0003,
     FileThread = 0x0004,
-}
-
-/// Type of data contained in this catalog file (legacy HFS only)
-///
-/// Described by TN1150 in [Catalog File Data](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#CatalogFile)
-#[repr(u16)]
-pub enum CatalogFileDataThreadRecordType {
-    Folder = 0x0100,
-    File = 0x0200,
-    FolderThread = 0x0300,
-    FileThread = 0x0400,
 }
 
 /// An on-screen point
@@ -469,20 +460,21 @@ pub struct Rect {
 pub type FourCharCode = u32;
 pub type OsType = FourCharCode;
 
-#[cfg_attr(feature = "repr_c", repr(C))]
-pub struct FileInfo {
-    pub file_type: OsType,
-    pub file_creator: OsType,
-    pub finder_flags: u16,
-    pub location: Point,
-    pub reserved: u16,
-}
-
+/// B-tree record holding information about a folder.
+///
+/// Described by TN1150 in [Catalog Folder Records](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#CatalogFolderRecord)
 #[cfg_attr(feature = "repr_c", repr(C))]
 pub struct CatalogFolder {
-    pub record_type: i16,
+    /// Should always be `CatalogFileDataRecordType::Folder`.
+    pub record_type: CatalogFileDataRecordType,
+
+    /// No flags are currently defined. Treat as a reserved field.
     pub flags: u16,
+
+    /// Number of files and folders directly contained by this folder.
+    ///
     pub valence: u32,
+    /// ID of parent folder
     pub folder_id: CatalogNodeId,
     pub create_date: DateTime,
     pub content_modification_date: DateTime,
@@ -490,8 +482,168 @@ pub struct CatalogFolder {
     pub access_date: DateTime,
     pub backup_date: DateTime,
     pub permissions: BsdInfo,
-    pub user_info: (),   // TODO FolderInfo
-    pub finder_info: (), // TODO ExtendedFolderInfo
+    pub user_info: FolderInfo,
+    pub finder_info: ExtendedFolderInfo,
     pub text_encoding: u32,
     pub reserved: u32,
+}
+
+/// Described by TN1150 in [Finder Info](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#FinderInfo)
+#[cfg_attr(feature = "repr_c", repr(C))]
+pub struct FolderInfo {
+    pub window_bounds: Rect,
+    pub finder_flags: u16,
+    pub location: Point,
+    pub reserved_field: u16,
+}
+
+/// Type of data contained in this catalog file (legacy HFS only)
+///
+/// Described by TN1150 in [Catalog File Data](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#CatalogFile)
+#[repr(u16)]
+pub enum CatalogFileDataThreadRecordType {
+    Folder = 0x0100,
+    File = 0x0200,
+    FolderThread = 0x0300,
+    FileThread = 0x0400,
+}
+
+/// Described by TN1150 in [Finder Info](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#FinderInfo)
+#[cfg_attr(feature = "repr_c", repr(C))]
+pub struct ExtendedFolderInfo {
+    pub scroll_position: Point,
+    pub reserved_1: i32,
+    pub extended_finder_flags: u16,
+    pub reserved_2: i16,
+    pub put_away_folder_id: u32,
+}
+
+/// B-tree record holding information about a file on the volume.
+///
+/// Described by TN1150 in [Catalog File Records](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#CatalogFileRecord)
+#[cfg_attr(feature = "repr_c", repr(C))]
+pub struct CatalogFile {
+    /// Should always be `CatalogFileDataRecordType::File`.
+    pub record_type: CatalogFileDataRecordType,
+
+    /// A bitfield of `CatalogFileFlag`
+    pub flags: u16,
+    pub reserved_1: u32,
+    pub file_id: CatalogNodeId,
+    pub create_date: DateTime,
+    pub content_modification_date: DateTime,
+    pub attribute_modification_date: DateTime,
+    pub access_date: DateTime,
+    pub backup_date: DateTime,
+    pub permissions: BsdInfo,
+    pub user_info: FileInfo,
+    pub finder_info: ExtendedFileInfo,
+    pub text_encoding: u32,
+    pub reserved_2: u32,
+
+    pub data_fork: ForkData,
+    pub resource_fork: ForkData,
+}
+
+#[repr(u16)]
+pub enum CatalogFileFlag {
+    /// None of the forks may be modified, but they may be opened for reading.
+    ///
+    /// Catalog information may still be changed.
+    FileLocked = 1,
+    ThreadExists = 2,
+}
+
+/// Described by TN1150 in [Finder Info](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#FinderInfo)
+#[cfg_attr(feature = "repr_c", repr(C))]
+pub struct FileInfo {
+    pub file_type: OsType,
+    pub file_creator: OsType,
+    pub finder_flags: u16,
+    /// Coordinate relative to parent folder
+    pub location: Point,
+    pub reserved: u16,
+}
+
+/// Described by TN1150 in [Finder Info](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#FinderInfo)
+#[cfg_attr(feature = "repr_c", repr(C))]
+pub struct ExtendedFileInfo {
+    pub reserved_1: [i16; 4],
+    pub extended_finder_flags: u16,
+    pub reserved_2: i16,
+    pub put_away_folder_id: i32,
+}
+
+/// B-tree record linking a Catalog Node ID to a file.
+///
+/// Described by TN1150 in [Catalog Thread Records](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#CatalogThreadRecord)
+#[cfg_attr(feature = "repr_c", repr(C))]
+pub struct CatalogThread {
+    /// One of `CatalogFileDataRecordType::FolderThread` or `CatalogFileDataRecordType::FileThread`.
+    ///
+    /// NB: TN1150 contradicts itself; Catalog File Data specifies that this should be
+    /// `FolderThread` or `FileThread`, whereas Catalog Thread Records specifies that this should be
+    /// `Folder` or `File` instead. Contextually, the `*Thread` variants make more sense here, as
+    /// the `Folder` and `File` variants are consumed by `CatalogFolder` and `CatalogFile`.
+    pub record_type: CatalogFileDataRecordType,
+    pub reserved: i16,
+
+    /// Parent CNID of the File or Folder referenced by this record.
+    pub parent_id: CatalogNodeId,
+
+    /// Name of the file or folder referenced yb this record.
+    pub node_name: UnicodeString255,
+}
+
+/// Finder flags (finderFlags, fdFlags and frFlags)
+///
+/// Described by TN1150 in [Finder Info](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#FinderInfo)
+#[repr(u16)]
+pub enum FinderFlags {
+    /// Files and folders (System 6)
+    IsOnDesk = 0x0001,
+
+    /// Files and folders
+    Color = 0x000E,
+
+    /// Files only (Applications only) If clear, the application needs to write to its resource fork,
+    /// and therefore cannot be shared on a server
+    IsShared = 0x0040,
+
+    /// This file contains no INIT resource. Files only (Extensions/Control Panels only)
+    HasNoInits = 0x0080,
+
+    /// Files only.  Clear if the file contains desktop database resources ('BNDL', 'FREF', 'open',
+    /// 'kind'...) that have not been added yet.  Set only by the Finder. Reserved for folders
+    HasBeenInited = 0x0100,
+
+    /// Files and folders
+    HasCustomIcon = 0x0400,
+
+    /// Files only
+    IsStationery = 0x0800,
+
+    /// Files and folders
+    NameLocked = 0x1000,
+
+    /// Files only
+    HasBundle = 0x2000,
+
+    /// Files and folders
+    IsInvisible = 0x4000,
+
+    /// Files only
+    IsAlias = 0x8000,
+}
+
+#[repr(u16)]
+pub enum ExtendedFinderFlags {
+    /// The other extended flags should be ignored
+    FlagsAreInvalid = 0x8000,
+
+    /// The file or folder has a badge resource
+    HasCustomBadge = 0x0100,
+
+    /// The file contains routing info resource
+    HasRoutingInfo = 0x0004,
 }

@@ -3,7 +3,7 @@
 //! Types and constants from Apple's [TN1150 - HFS Plus Volume Format](https://developer.apple.com/library/archive/technotes/tn/tn1150.html)
 
 #![allow(non_upper_case_globals, non_snake_case, non_camel_case_types)]
-#![forbid(dead_code, unsafe_code)]
+#![forbid(dead_code, unsafe_code, unused)]
 
 /// File and folder name, up to 255 Unicode-16 characters. Strings are stored as
 /// fully decomposed in canonical order.
@@ -276,15 +276,17 @@ pub struct HFSPlusCatalogKey {
     pub nodeName: HFSUniStr255,
 }
 
+/// BTree Record Type for a folder, to be interpreted as an `HFSPlusCatalogFolder`.
 pub const kHFSPlusFolderRecord: u16 = 0x0001;
-pub const kHFSPlusFileRecord: u16 = 0x0002;
-pub const kHFSPlusFolderThreadRecord: u16 = 0x0003;
-pub const kHFSPlusFileThreadRecord: u16 = 0x0004;
 
-pub const kHFSFolderRecord: u16 = 0x0100;
-pub const kHFSFileRecord: u16 = 0x0200;
-pub const kHFSFolderThreadRecord: u16 = 0x0300;
-pub const kHFSFileThreadRecord: u16 = 0x0400;
+/// BTree Record Type for a file, to be interpreted as an `HFSPlusCatalogFile`.
+pub const kHFSPlusFileRecord: u16 = 0x0002;
+
+/// BTree Record Type for a folder thread record, to be interpreted as an `HFSPlusCatalogThread`.
+pub const kHFSPlusFolderThreadRecord: u16 = 0x0003;
+
+/// BTree Record Type for a file thread record, to be interpreted as an `HFSPlusCatalogThread`.
+pub const kHFSPlusFileThreadRecord: u16 = 0x0004;
 
 /// An on-screen point
 ///
@@ -310,6 +312,76 @@ pub type FourCharCode = u32;
 pub type OSType = FourCharCode;
 
 #[cfg_attr(feature = "repr_c", repr(C))]
+pub struct HFSPlusCatalogFolder {
+    pub recordType: i16,
+    pub flags: u16,
+    pub valence: u32,
+    pub folderID: HFSCatalogNodeID,
+    pub createDate: u32,
+    pub contentModDate: u32,
+    pub attributeModDate: u32,
+    pub accessDate: u32,
+    pub backupDate: u32,
+    pub permissions: HFSPlusBSDInfo,
+    pub userInfo: FolderInfo,
+    pub finderInfo: ExtendedFolderInfo,
+    pub textEncoding: u32,
+    pub reserved: u32,
+}
+
+#[cfg_attr(feature = "repr_c", repr(C))]
+pub struct FolderInfo {
+    pub windowBounds: Rect,
+    pub finderFlags: u16,
+    pub location: Point,
+    pub reservedField: u16,
+}
+
+pub const kHFSFolderRecord: u16 = 0x0100;
+pub const kHFSFileRecord: u16 = 0x0200;
+pub const kHFSFolderThreadRecord: u16 = 0x0300;
+pub const kHFSFileThreadRecord: u16 = 0x0400;
+
+#[cfg_attr(feature = "repr_c", repr(C))]
+pub struct ExtendedFolderInfo {
+    pub scrollPosition: Point,
+    pub reserved1: i32,
+    pub extendedFinderFlags: u16,
+    pub reserved2: i16,
+    pub putAwayFolderID: u32,
+}
+
+/// B-tree record holding information about a file on the volume.
+///
+/// Described by TN1150 in [Catalog File Records](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#CatalogFileRecord)
+#[cfg_attr(feature = "repr_c", repr(C))]
+pub struct HFSPlusCatalogFile {
+    pub recordType: i16,
+    pub flags: u16,
+    pub reserved1: u32,
+    pub fileID: HFSCatalogNodeID,
+    pub createDate: u32,
+    pub contentModDate: u32,
+    pub attributeModDate: u32,
+    pub accessDate: u32,
+    pub backupDate: u32,
+    pub permissions: HFSPlusBSDInfo,
+    pub userInfo: FileInfo,
+    pub finderInfo: ExtendedFileInfo,
+    pub textEncoding: u32,
+    pub reserved2: u32,
+
+    pub dataFork: HFSPlusForkData,
+    pub resourceFork: HFSPlusForkData,
+}
+
+pub const kHFSFileLockedBit: u16 = 0x0000;
+pub const kHFSFileLockedMask: u16 = 0x0001;
+pub const kHFSThreadExistsBit: u16 = 0x0001;
+pub const kHFSThreadExistsMask: u16 = 0x0002;
+
+/// Described by TN1150 in [Finder Info](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#FinderInfo)
+#[cfg_attr(feature = "repr_c", repr(C))]
 pub struct FileInfo {
     pub fileType: OSType,
     pub fileCreator: OSType,
@@ -317,3 +389,64 @@ pub struct FileInfo {
     pub location: Point,
     pub reserved: u16,
 }
+
+/// Described by TN1150 in [Finder Info](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#FinderInfo)
+#[cfg_attr(feature = "repr_c", repr(C))]
+pub struct ExtendedFileInfo {
+    pub reserved1: [i16; 4],
+    pub extendedFinderFlags: u16,
+    pub reserved2: i16,
+    pub putAwayFolderID: i32,
+}
+
+#[cfg_attr(feature = "repr_c", repr(C))]
+pub struct HFSPlusCatalogThread {
+    pub recordType: i16,
+    pub reserved: i16,
+    pub parentID: HFSCatalogNodeID,
+    pub nodeName: HFSUniStr255,
+}
+
+/// Files and folders (System 6)
+pub const kIsOnDesk: u16 = 0x0001;
+
+/// Files and folders
+pub const kColor: u16 = 0x000E;
+
+/// Files only (Applications only) If clear, the application needs to write to its resource fork,
+/// and therefore cannot be shared on a server
+pub const kIsShared: u16 = 0x0040;
+
+/// This file contains no INIT resource. Files only (Extensions/Control Panels only)
+pub const kHasNoINITs: u16 = 0x0080;
+
+/// Files only.  Clear if the file contains desktop database resources ('BNDL', 'FREF', 'open',
+/// 'kind'...) that have not been added yet.  Set only by the Finder. Reserved for folders
+pub const kHasBeenInited: u16 = 0x0100;
+
+/// Files and folders
+pub const kHasCustomIcon: u16 = 0x0400;
+
+/// Files only
+pub const kIsStationery: u16 = 0x0800;
+
+/// Files and folders
+pub const kNameLocked: u16 = 0x1000;
+
+/// Files only
+pub const kHasBundle: u16 = 0x2000;
+
+/// Files and folders
+pub const kIsInvisible: u16 = 0x4000;
+
+/// Files only
+pub const kIsAlias: u16 = 0x8000;
+
+/// The other extended flags should be ignored
+pub const kExtendedFlagsAreInvalid: u16 = 0x8000;
+
+/// The file or folder has a badge resource
+pub const kExtendedFlagHasCustomBadge: u16 = 0x0100;
+
+/// The file contains routing info resource
+pub const kExtendedFlagHasRoutingInfo: u16 = 0x0004;
