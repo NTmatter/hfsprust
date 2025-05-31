@@ -267,12 +267,24 @@ pub enum BTreeHeaderRecAttribute {
     kBTVariableIndexKeysMask = 0x00000004,
 }
 
+/// User Data Records provide information associated with the B-Tree.
+/// They are only used in the hot file B-tree, and are unused/reserved in the
+/// catalog/extents/attributes trees.
+///
+/// Described in TN1150 [User Data Record](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#UserDataRecord)
 #[cfg_attr(feature = "repr_c", repr(C))]
 pub struct BTreeUserDataRecord(pub [u8; 128]);
 
+// DESIGN Should this be a slice, rather than some owned bytes?
+/// Allocation File Bitmap
+///
+/// Described by TN1150 in [Allocation File](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#AllocationFile)
 #[cfg_attr(feature = "repr_c", repr(C))]
 pub struct BTreeAllocationMapRecord(pub Vec<u8>);
 
+/// Determine if a block has been set in the bitmap.
+///
+/// Returns whether the bit is set, or an error if block index is out of bounds.
 pub fn IsAllocationBlockUsed(thisAllocationBlock: u32, allocationFileContents: &[u8]) -> bool {
     let thisByte = allocationFileContents[(thisAllocationBlock / 8) as usize];
     (thisByte & (1 << (7 - (thisAllocationBlock % 8)))) != 0
@@ -563,8 +575,8 @@ pub struct journal_header {
     pub jhdr_size: u32,
 }
 
-pub const JOURNAL_HEADER_MAGIC: u32 = 0x4a4e4c78;
-pub const ENDIAN_MAGIC: u32 = 0x12345678;
+pub const JOURNAL_HEADER_MAGIC: u32 = u32::from_be_bytes([0x4a, 0x4e, 0x4c, 0x78]);
+pub const ENDIAN_MAGIC: u32 = u32::from_be_bytes([0x12, 0x34, 0x56, 0x78]);
 
 #[cfg_attr(feature = "repr_c", repr(C))]
 pub struct block_list_header {

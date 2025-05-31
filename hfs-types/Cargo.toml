@@ -2,16 +2,30 @@
 name = "hfs-types"
 version = "0.1.0"
 edition = "2024"
-description = "Core HFS types described by TN1150"
+description = "Core HFS Plus types described by TN1150"
 keywords = ["hfs", "hfsplus"]
 categories = ["filesystem"]
 authors = ["Thomas Johnson <NTmatter@gmail.com>"]
 license = "MIT"
 
 [dependencies]
+# FUTURE: deku for easier parsing
 
 [features]
-default = []
+default = ["repr_c"]
+
+## Use a Union to represent the `HFSPlusBSDInfo::special` field as defined in
+## TN1150. This is mostly a semantic convenience, which is disabled by default
+## to avoid unsafe usage in dependent crates.
 file_info_union = []
+
+## The BTree struct is packed to match the on-disk format. This is disabled by
+## default to avoid unsafe usage in dependent crates.
 packed_btree = []
+
+## Structs are defined as repr(C) for better FFI and on-disk compatibility. Note
+## that the `packed_btree` feature will be required to transmute directly from
+## on-disk data, in addition to any required endianness conversion. This is
+## enabled by default, as it is expected that users of this crate will be
+## interacting with a C codebase.
 repr_c = []

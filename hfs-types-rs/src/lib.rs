@@ -64,7 +64,11 @@ pub enum KnownCreatorCodes {
     FsckHfs = u32::from_be_bytes(*b"fsck"),
 }
 
-/// Volume header, offset 1024 bytes from start of disk.
+/// Volume header, offset 1024 bytes from start of disk. An alternate header is also stored 1024
+/// bytes before the end of the volume.
+///
+/// The first 1024 bytes are reserved for boot blocks, described in
+/// [Inside Macintosh: Files - Boot Blocks](https://web.archive.org/web/20010210044247/https://developer.apple.com/techpubs/mac/Files/Files-101.html)
 ///
 /// Described in TN1150 [Volume Header](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#VolumeHeader)
 #[cfg_attr(feature = "repr_c", repr(C))]
@@ -389,10 +393,19 @@ pub enum BTreeAttributeMask {
     VariableIndexKeys = 4,
 }
 
+/// User Data Records provide information associated with the B-Tree.
+/// They are only used in the hot file B-tree, and are unused/reserved in the
+/// catalog/extents/attributes trees.
+///
+/// Described in TN1150 [User Data Record](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#UserDataRecord)
 #[cfg_attr(feature = "repr_c", repr(C))]
 pub struct UserDataRecord(pub [u8; 128]);
 
-/// Allocation File Bitmap
+// DESIGN Should this be a slice, rather than owned bytes?
+/// Allocation File Bitmap.
+///
+/// If the bitmap is larger than the map record, the Node ID of the next bitmap is stored in the
+/// `BTreeNodeDescriptor::forward_link` field.
 ///
 /// Described by TN1150 in [Allocation File](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#AllocationFile)
 #[cfg_attr(feature = "repr_c", repr(C))]
@@ -419,6 +432,9 @@ impl AllocationMapRecord {
 
 // endregion
 
+// DESIGN: The `length` field should be one of u8 or u16 as per [Keyed Records](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#KeyedRecords)
+/// Catalog Key in B-Tree
+///
 /// Described by TN1150 in [Catalog File Key](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#CatalogFile)
 #[cfg_attr(feature = "repr_c", repr(C))]
 pub struct CatalogKey {
@@ -782,8 +798,8 @@ pub struct JournalHeader {
 }
 
 impl JournalHeader {
-    pub const JOURNAL_HEADER_MAGIC: u32 = 0x4a4e4c78;
-    pub const ENDIAN_MAGIC: u32 = 0x12345678;
+    pub const JOURNAL_HEADER_MAGIC: u32 = u32::from_be_bytes([0x4a, 0x4e, 0x4c, 0x78]);
+    pub const ENDIAN_MAGIC: u32 = u32::from_be_bytes([0x12, 0x34, 0x56, 0x78]);
 }
 
 #[cfg_attr(feature = "repr_c", repr(C))]
