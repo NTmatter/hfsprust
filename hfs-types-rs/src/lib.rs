@@ -4,7 +4,9 @@
 //! adjusted to use Rust-friendly naming.
 
 #![forbid(dead_code, unsafe_code, unused)]
+#![forbid(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+use crate::FromSliceError::{MismatchedLength, SliceTooShort};
 use std::num::NonZeroU32;
 
 #[cfg_attr(feature = "repr_c", repr(C))]
@@ -177,6 +179,87 @@ pub struct ForkData {
 pub struct ExtentDescriptor {
     pub start_block: u32,
     pub block_count: u32,
+}
+
+/// Create a fixed-length array from a variable, starting index, and length.
+/// Source bounds are final, and can be checked at compile time.
+macro_rules! arr_bytes {
+    // ($var:tt, $start:tt, 1 ) => {
+    //     [$var[$start]]
+    // };
+    // ($var:tt, $start:tt, 2 ) => {
+    //     [$var[$start], $var[$start + 1]]
+    // };
+    // ( $var:tt, $start:tt, 8 ) => {
+    //     [
+    //         $var[$start + 0],
+    //         $var[$start + 1],
+    //         $var[$start + 2],
+    //         $var[$start + 3],
+    //         $var[$start + 4],
+    //         $var[$start + 5],
+    //         $var[$start + 6],
+    //         $var[$start + 7],
+    //     ]
+    // };
+
+    // Create a 4-byte array
+    ( $var:tt, $start:tt, 4 ) => {
+        [
+            $var[$start + 0],
+            $var[$start + 1],
+            $var[$start + 2],
+            $var[$start + 3],
+        ]
+    };
+}
+
+impl From<[u8; 8]> for ExtentDescriptor {
+    fn from(value: [u8; 8]) -> Self {
+        // This is ugly. It'd be nice to have a macro that generates the range.
+        // At the very least, access is enforced at compile-time.
+        // Something like: arr![value, 4..8] or arr![value, 4, 4]
+        let start_block = u32::from_be_bytes(arr_bytes!(value, 0, 4));
+        let block_count = u32::from_be_bytes(arr_bytes!(value, 4, 4));
+
+        Self {
+            start_block,
+            block_count,
+        }
+    }
+}
+
+pub enum FromSliceError {
+    SliceTooShort,
+    MismatchedLength,
+}
+impl TryFrom<&[u8]> for ExtentDescriptor {
+    type Error = FromSliceError;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        if value.len() < 8 {
+            return Err(SliceTooShort);
+        }
+
+        let buf: [u8; 4] = value
+            .get(0..4)
+            .ok_or(SliceTooShort)?
+            .try_into()
+            .map_err(|_| MismatchedLength)?;
+        let start_block = u32::from_be_bytes(buf);
+
+        let buf: [u8; 4] = value
+            .get(4..8)
+            .ok_or(SliceTooShort)?
+            .try_into()
+            .map_err(|_| MismatchedLength)?;
+        let block_count = u32::from_be_bytes(buf);
+
+        Ok(Self {
+            start_block,
+            block_count,
+        })
+    }
 }
 
 pub type ExtentRecord = [ExtentDescriptor; 8];
